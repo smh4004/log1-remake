@@ -88,28 +88,20 @@ def convert(rom, a, mode, donor_tiles):
     return m, stats
 
 
-def ground_swap(rom, a, m, donor, hue=(70, 170)):
-    """Replace bg3 tiles of one colour family with a tiled ground patch from a BF map. Returns tiles replaced."""
+def ground_swap(a, m, patch, hue, sat=.25, val=.35, layers=('bg3 (bottom)',)):
+    """Replace opaque LoG1 tiles of one colour family with a repeating 32x32 BF ground patch. Returns tiles replaced."""
     import colorsys
-    s = mapkit.Source(rom, donor); g = s.layer(3); pal = mapkit.palette(rom)[:256]; best = None
-    for y in range(0, g.shape[0] - 31, 8):
-        for x in range(0, g.shape[1] - 31, 8):
-            b = g[y:y + 32, x:x + 32]
-            if not b.all(): continue
-            r, gg, bb = pal[b].reshape(-1, 3).mean(0) / 255; h = colorsys.rgb_to_hsv(r, gg, bb)[0] * 360
-            if hue[0] <= h <= hue[1]:
-                sc = len(np.unique(b)) + np.std(pal[b].astype(float))
-                if best is None or sc < best[0]: best = (sc, b.copy())
-    if best is None: return 0
-    n = 0; G = a.L['bg3 (bottom)']; c = m.can[3]
-    for y in range(a.H):
-        for x in range(a.W):
-            if not G[y, x]: continue
-            t, p = a.tile(G[y, x], x, y)
-            if not t.all(): continue
-            r, gg, bb = p[t].reshape(-1, 3).mean(0) / 255; hh, ss, vv = colorsys.rgb_to_hsv(r, gg, bb)
-            if hue[0] <= hh * 360 <= hue[1] and ss > .25 and vv > .35:
-                c[y * 8:y * 8 + 8, x * 8:x * 8 + 8] = best[1][(y % 4) * 8:(y % 4) * 8 + 8, (x % 4) * 8:(x % 4) * 8 + 8]; n += 1
+    n = 0
+    for name in layers:
+        G = a.L[name]; c = m.can[dict(LAYERS)[name]]
+        for y in range(a.H):
+            for x in range(a.W):
+                if not G[y, x]: continue
+                t, p = a.tile(G[y, x], x, y)
+                if not t.all(): continue
+                h, s_, v = colorsys.rgb_to_hsv(*(p[t].reshape(-1, 3).mean(0) / 255))
+                if hue[0] <= h * 360 <= hue[1] and s_ > sat and v > val:
+                    c[y * 8:y * 8 + 8, x * 8:x * 8 + 8] = patch[(y % 4) * 8:(y % 4) * 8 + 8, (x % 4) * 8:(x % 4) * 8 + 8]; n += 1
     return n
 
 

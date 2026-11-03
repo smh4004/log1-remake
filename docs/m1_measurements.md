@@ -64,3 +64,9 @@ These links haven't been checked in game for the right form or age, such as kid 
 Areas 0, 4 and 24 convert with exact layouts: 568, 726 and 568 unique tiles, under the 896 limit. All three recoloured maps loaded in the emulator on Snake Way, and walking moved the player with collision active.
 Automatic 8x8 matching doesn't work: it matched 1 of 756 tiles in area 4, using the one forest donor the loader could read.
 The automatic ground swap replaced 7,913 tiles but chose a tree-canopy patch, so it needs a hand-picked ground patch.
+
+## M3 style rule (user, 2026-11-03)
+Match Buu's Fury only where feasible. If a result looks bad, recolour or ask.
+Second test with hand-picked ground patches: area 0's sand swap damaged rocks and palm trunks, so that map stays recoloured.
+Area 4's grass swap replaced 7,643 tiles and needs a decision: it lost flowers and shadows, and its olive ground doesn't match the trees.
+`tools/bfmaps.py` reads Buu's Fury maps with animated tiles or empty chunks (static frames only). LoG1's animated tiles aren't ported yet.
