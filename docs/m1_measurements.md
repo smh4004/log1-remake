@@ -45,3 +45,13 @@ Of 109 LoG1 sprite sets: 46 have a name match, 47 are generic NPCs or enemies, a
 burter, crab, ginyu, guru, jeice, nail, nappa, oldman, ptero1-3, raditz, recoome, snkqueen, squirrel, wolf.
 Text matches can be mentions rather than sprites; Frieza's four forms match only by name so far.
 LoG1's own sprites could fill gaps at build time: the checked unmatched characters use 16x32, 32x32 or 32x16 frames.
+
+## In-area flight hook (`src/flight.c`, tested 2026-11-03)
+R takes off and lands, through a veneer on the key reader 0x0803D4A0 and 240 bytes of code at ROM 0xBF0000.
+On Snake Way: walking down stops at y 200; after R the player reaches y 407; R over open sky is refused; R at y 176 lands,
+restores the pointers, and walking stops at y 200 again.
+Not built or tested: flying animation (slot 15), ki and combat while flying, changing areas while flying, and LoG1's flyable masks.
+
+## LoG1 sprite importer (`tools/log1_sprites.py`)
+1,248 of 1,340 frames fit Buu's Fury's 32x32 character limit. 92 frames in 8 character records need boss handling or shrinking.
+One test frame set ran in the emulator on an existing NPC actor. Row-to-animation mapping is a first guess and not confirmed per character.
