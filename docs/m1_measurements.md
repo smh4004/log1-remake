@@ -89,3 +89,9 @@ Each tile plays at LoG1's speed rounded to whole frames, and a base tile identic
 `0800CAC8`/`0800CDF4` create an actor through the area actor loader. `0800DC0C` changes an existing actor's sprite set. `0800DC8A` sets actor byte +0x13.
 `0800CC60` plays a conversation, `0800CC74` plays music, `0800E078` starts a song from the track table. `0800CA74`, `0800CB24`, `0800CC02` and `0800D9C4` act on an existing actor.
 Boss kill targets come from `defeat` tasks, and the actors are placed in area data with story flags. Raditz has no `defeat` task, and frieza2 and frieza3 aren't placed in any area.
+
+## Boss fights in LoG1 (traced in reference C, 2026-11-03)
+The `actor_leave` action sends message 2 to the matching character; its handler `sub_0800573A` builds an enemy on that character (`sub_08006D90`, row from byte table 0x0815A69C). So this action makes a character hostile.
+Raditz: quest 22 turns him hostile after conversation 65, and quest 23 (`activate`, sprite 84) gives 4,000 EXP, plays scene 3 and warps to area 10.
+Frieza: quests 64-67 do the same. `change_actor` sets actor byte +0x15 to the next sprite set (34 to 35 to 36), then quest 67 warps to area 41, where `frieza4` turns hostile; quest 68 (`defeat`) ends the game.
+Reading `activate` as "this hostile character was beaten" fits the data, but it hasn't been observed running. The handler for that event is `sub_08005E12`.

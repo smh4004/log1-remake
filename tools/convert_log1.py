@@ -87,7 +87,8 @@ def main():
             elif k == 'give_pickup': txt += ['# give LoG1 pickup %d (item map: M2)' % a['item'], 'do call 128 0']
             elif k == 'music': txt += ['# LoG1 track %d (music map: M8)' % a['track'], 'do music 0']
             elif k == 'warp': txt += ['# warp LoG1 area %d at %d,%d (area map: M3)' % (a['area'], a['x'], a['y']), 'do call 120 20; call 119 1 1 1 %d %d; call 121 20' % (a['x'], a['y'])]
-            elif k in ('actor_leave', 'change_actor'): txt.append('set_flag %d' % eflag(('actor', a['area'], a['sprite']), a.get('param', 0)))
+            elif k == 'actor_leave': txt.append('# make hostile: LoG1 sprite %d in area %d (spawn the enemy at M4)' % (a['sprite'], a['area'])); txt.append('set_flag %d' % eflag(('hostile', a['area'], a['sprite']), 0))
+            elif k == 'change_actor': txt.append('# change sprite set: %d to %d in area %d' % (a['sprite'], a['param'], a['area'])); txt.append('set_flag %d' % eflag(('form', a['area'], a['sprite']), a['param']))
             else: txt.append('# %s %s: %s' % (ACTIONS[k], k, json.dumps({f: v for f, v in a.items() if f not in ('label', 'raw')})))
     path = os.path.join(out, 'quests.scene'); open(path, 'w', encoding='utf-8').write('\n'.join(txt) + '\n')
     sc = scenes.parse(path)
