@@ -4,7 +4,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ENTRY, CODE = 0x3D4A0, 0xBF0000
 
 
-def install(rom, spawns=()):
+def install(rom, spawns=(), walks=()):
     """spawns: up to 8 (flag, area entry bus address, record bus address, NPC index to remove or 0) rows for live_spawn."""
     d = tempfile.mkdtemp(); o, e, b = (os.path.join(d, n) for n in ('f.o', 'f.elf', 'f.bin'))
     subprocess.check_call(['arm-none-eabi-gcc', '-mthumb', '-mcpu=arm7tdmi', '-Os', '-ffreestanding', '-nostdlib', '-c', os.path.join(ROOT, 'src', 'flight.c'), '-o', o])
@@ -18,6 +18,8 @@ def install(rom, spawns=()):
     rom[ENTRY:ENTRY + 16] = struct.pack('<HHIII', 0x4778, 0x46C0, 0xE59FC000, 0xE12FFF1C, entry | 1)
     tab = int(next(l.split()[0] for l in syms.splitlines() if l.endswith('spawn_table')), 16) - 0x08000000
     for i, row in enumerate(spawns): struct.pack_into('<4I', rom, tab + 16 * i, *row)
+    wt = int(next(l.split()[0] for l in syms.splitlines() if l.endswith('walk_table')), 16) - 0x08000000
+    for i, row in enumerate(walks): struct.pack_into('<2I4H', rom, wt + 16 * i, *row)
     return len(code)
 
 

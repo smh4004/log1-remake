@@ -6,7 +6,7 @@ Other NPCs are listed in the return value, not guessed. Talk lists come from `ta
 import json, os, struct, sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path[:0] = [os.path.join(ROOT, 'tools'), os.path.join(ROOT, 'vendor', 'gero-tools', 'tools')]
-import log1_talk, map_convert as C  # noqa: E402
+import map_convert as C  # noqa: E402
 
 BB, WORLD = 0x08000000, 26
 AREAS, COUNT, TABLE_LIT, COUNT_INSN = 0x8E2E0, 452, 0x8A58, 0x125E0     # same values as Gero's tools/areas.py
@@ -45,41 +45,53 @@ def arrival(a, x, y, key):
     return best
 
 
-def build(r, log1, ids, talk=None, named=None):
-    """r: ROM bytearray, at least 16 MB. ids: LoG1 areas to add. Returns (start of new table, skipped NPC list)."""
-    cache = {}; moved = []; entries = []; skipped = []; tmpl = next(bytes(r[e:e + 56]) for e in range(AREAS, AREAS + 56 * COUNT, 56) if r[e] == 1 and r[e + 1] == 1); idset = set(ids)
+def build(r, log1, ids, story, named, actors):
+    """Add areas `ids` from the story plan. Returns (table offset, hook spawn rows, hook walk rows, skipped characters)."""
+    tmpl = next(bytes(r[e:e + 56]) for e in range(AREAS, AREAS + 56 * COUNT, 56) if r[e] == 1 and r[e + 1] == 1)
+    cache = {}; entries = []; skipped = []; idset = set(ids); moved = []; addr = {}; spawns = []; D = {'down': 0, 'up': 1, 'left': 2, 'right': 3}
     def put(b):
         while len(r) % 4: r.append(0)
         o = len(r); r.extend(b); return BB + o
+    def get(n): return cache.setdefault(n, C.Area(log1, n)) if n not in cache else cache[n]
+    NEW_BASE = 56 * COUNT
+    for k, n in enumerate(ids): addr[n] = k
     for n in ids:
-        a = C.Area(log1, n); m, st = C.convert(r, a, 'recolour', []); an, dur = C.anim_tiles(r, a); C.reduce_tiles(r, m, 860, [b for b, _ in an])
-        P = m.write(r, C.TEMPLATE); C.add_anim(r, P, an, dur)
-        exits = []
+        a = get(n); m, st = C.convert(r, a, 'recolour', []); an, dur = C.anim_tiles(r, a); C.reduce_tiles(r, m, 860, [b for b, _ in an])
+        P = m.write(r, C.TEMPLATE); C.add_anim(r, P, an, dur); exits = []
         for t in a.info['triggers']:
             if t['kind'] == 'warp' and t['to_area'] in idset and t['mode'] & 1:
-                x0, y0, x1, y1 = t['rect']; D = {'down': 0, 'up': 1, 'left': 2, 'right': 3}; name = door_dir(a, t['rect']); key = D[name]
-                dest = key | (WORLD << 8) | ((t['to_area'] + 1) << 16) | (1 << 24)
-                ta = cache.setdefault(t['to_area'], C.Area(log1, t['to_area'])) if t['to_area'] not in cache else cache[t['to_area']]
-                land = arrival(ta, t['to_x'], t['to_y'], name); assert land, 'no clear arrival in area %d' % t['to_area']
-                moved.append((n, t['to_area'], land[2]))
-                exits.append(struct.pack('<II', 0, put(struct.pack('<IIHHHHII', 0x08007675, 0x0800776D, x0, y0, x1, y1, dest, (land[1] << 16) | land[0]))))
-        for q, (fa, fx, fy) in log1_talk.FIND.items():            # pickups: LoG1 collects them by walking over them
-            if fa != n or not named: continue
-            exits.append(struct.pack('<II', 0, put(struct.pack('<IIHHHHI', 0x0800742D, 0x080077DF, fx - 8, fy - 8, fx + 16, fy + 16, named['find_q%d' % q]))))
-        recs = bytearray(); offs = []
+                name = door_dir(a, t['rect']); key = D[name]; dest = key | (WORLD << 8) | ((t['to_area'] + 1) << 16) | (1 << 24)
+                land = arrival(get(t['to_area']), t['to_x'], t['to_y'], name); assert land, 'no clear arrival in area %d' % t['to_area']; moved.append((n, t['to_area'], land[2]))
+                x0, y0, x1, y1 = [max(0, v) for v in t['rect']]; exits.append(struct.pack('<II', 0, put(struct.pack('<IIHHHHII', 0x08007675, 0x0800776D, x0, y0, x1, y1, dest, (land[1] << 16) | land[0]))))
+            elif t['kind'] not in ('warp',): skipped.append((n, 'trigger', t['kind']))
+        for d in story.doors.get(n, []):
+            x0, y0, x1, y1 = [max(0, v) for v in d['rect']]; exits.append(struct.pack('<II', 0, put(struct.pack('<IIHHHHI', 0x0800742D, 0x080077DF, x0, y0, x1, y1, named[d['list']]))))
+        recs = bytearray(); offs = []; enemy_objs = []
+        flags = story.qof
         for s in a.info['actors']:
-            if s['kind'] == 2 or s['show'] != 0 or s['sprite'] not in BF_IDX: skipped.append((n, s['sprite'], s['kind'], s['show'])); continue
-            offs.append(len(recs)); recs += struct.pack('<9I', 0x0800A223, 0x32, 0x08017DA3, 0x00020002, (s['y'] << 16) | s['x'], (talk or {}).get(s['param'], 0), BF_IDX[s['sprite']], 1, 0)
+            cond = 0x20002
+            if s['show'] == 1: cond = 0x20000 | (story.QF + flags[s['flag']])
+            elif s['show'] == 2: cond = 0x10000 | (story.QF + flags[s['flag']])
+            sid = story.names.index(s['sprite'])
+            if s['kind'] == 2:
+                row = actors.row(s['sprite']); ch = actors.actor(s['sprite'], True)
+                enemy_objs.append(put(struct.pack('<8I', 0x0800FD55, 0 if s['show'] == 0 else cond, row, (s['y'] << 16) | s['x'], ch, 0x080555A0, 1, 0x080716EC))); continue
+            idx = BF_IDX.get(s['sprite']) or actors.actor(s['sprite'], False)
+            talk = named.get('talk_set%02d' % s['param'], 0); offs.append(len(recs))
+            recs += struct.pack('<9I', 0x0800A223, 0x32, 0x08017DA3, cond, (s['y'] << 16) | s['x'], talk, idx, 1, 0)
+            if (n, sid) in story.hostile:
+                death = story.death_script(n, sid, put); ch = actors.actor(s['sprite'], True); row = actors.row(s['sprite'], death)
+                rec = put(struct.pack('<8I', 0x0800FD55, 0, row, (s['y'] << 16) | s['x'], ch, 0x080555A0, 1, 0x080716EC)); spawns.append((story.hostile[(n, sid)], n, rec, idx))
         objs = []
         if recs:
             blk = put(bytes(recs))
             for off in offs: struct.pack_into('<I', r, blk - BB + off + 32, blk + off); objs.append(blk + off + 8)
+        objs += enemy_objs
         e = bytearray(tmpl); e[0], e[1], e[2], e[3] = WORLD, n + 1, 1, len(exits); struct.pack_into('<I', e, 4, len(objs))
         struct.pack_into('<I', e, 0x10, put(b''.join(exits)) if exits else 0); struct.pack_into('<I', e, 0x14, put(b''.join(struct.pack('<I', o) for o in objs)) if objs else 0)
-        struct.pack_into('<I', e, 0x2C, put(struct.pack('<I', P)))
-        entries.append(bytes(e))
+        struct.pack_into('<I', e, 0x2C, put(struct.pack('<I', P))); entries.append(bytes(e))
     cnt = COUNT + len(entries); tab = put(bytes(r[AREAS:AREAS + 56 * COUNT]) + b''.join(entries))
     struct.pack_into('<I', r, TABLE_LIT, tab); a_ = min(0xFF, cnt // 2)
     struct.pack_into('<4H', r, COUNT_INSN, 0x2000 | a_, 0x0040, 0x3000 | (cnt - 2 * a_), 0x4770)
-    print('arrivals (from, to, px moved)', moved)
-    return tab, skipped
+    ent = lambda n: tab + 56 * (COUNT + addr[n])
+    return tab, [(f, ent(n), rec, idx) for f, n, rec, idx in spawns], [(f, ent(n), x1, y1, x2, y2) for f, n, x1, y1, x2, y2 in story.walks if n in idset], skipped, moved

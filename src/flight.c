@@ -22,6 +22,22 @@ typedef struct { u32 flag, area, record, remove; } spawn_t;   /* remove: NPC ind
 __attribute__((section(".text.table"))) volatile const spawn_t spawn_table[8] = {{0, 0, 0, 0}};
 typedef void *(*spawn_fn)(void *, int); typedef void (*add_fn)(void *, void *); typedef void *(*find_fn)(void *, int, int);
 
+/* Quest-driven collision changes: when a flag is set in that area, mark a tile rectangle walkable in the live floor mask. */
+typedef struct { u32 flag, area; u16 x1, y1, x2, y2; } walk_t;
+__attribute__((section(".text.table"))) volatile const walk_t walk_table[16] = {{0, 0, 0, 0, 0, 0}};
+#define WDONE  ((volatile u8 *)0x0203FF30)   /* 16 bytes */
+
+static void live_walk(int new_area) {
+    for (int i = 0; i < 16 && walk_table[i].flag; i++) {
+        volatile const walk_t *w = &walk_table[i];
+        if (new_area) WDONE[i] = 0;
+        if (WDONE[i] || w->area != AREA || !(FLAGS[w->flag >> 3] >> (w->flag & 7) & 1)) continue;
+        WDONE[i] = 1;
+        u8 *m = (u8 *)(STATE[1] ? AIR : FLOOR);
+        for (int y = w->y1; y < w->y2; y++) for (int x = w->x1; x < w->x2; x++) m[y * 32 + (x >> 3)] |= 1 << (x & 7);
+    }
+}
+
 static void live_spawn(int new_area) {
     for (int i = 0; i < 8 && spawn_table[i].flag; i++) {
         volatile const spawn_t *s = &spawn_table[i];
@@ -46,6 +62,7 @@ void flight_keys(u8 *st) {
     int fresh = AREA != LAST;
     if (fresh) { LAST = AREA; STATE[1] = 0; }
     live_spawn(fresh);
+    live_walk(fresh);
     int r = (k & KEY_R) != 0, pressed = r && !STATE[0]; STATE[0] = r;
     if (!pressed || !PLAYER) return;
     if (STATE[1]) {
