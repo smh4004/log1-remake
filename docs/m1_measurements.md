@@ -120,3 +120,8 @@ The player and NPC were placed by RAM write, because the test boots through Buu'
 
 ## New-game start (`tools/slice_build.py`, 2026-11-03)
 `src/scenes/opening.scene` replaces Buu's Fury's opening list 0x780550, so a new game loads LoG1's area 0 with no RAM writes. Buu's Fury's intro movie still plays before it.
+
+## Real areas and doors (`tools/log1_areas.py`, 2026-11-03)
+New table entries in world 26 hold converted maps, warp doors and NPCs with Buu's Fury character IDs. Sprite sets without one are skipped and listed.
+The player's live collision box is 16x8. With it, `tools/reach_log1.py` finds all 87 arrival points clear and all 92 walk-mode warps reachable on LoG1's starting masks.
+Buu's Fury walks the player about 14 px on arrival, which froze the player inside a wall at LoG1's exact spot; `arrival()` now compensates. Door direction comes from the most walled-off edge of each zone.
