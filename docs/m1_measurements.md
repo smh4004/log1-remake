@@ -95,3 +95,8 @@ The `actor_leave` action sends message 2 to the matching character; its handler 
 Raditz: quest 22 turns him hostile after conversation 65, and quest 23 (`activate`, sprite 84) gives 4,000 EXP, plays scene 3 and warps to area 10.
 Frieza: quests 64-67 do the same. `change_actor` sets actor byte +0x15 to the next sprite set (34 to 35 to 36), then quest 67 warps to area 41, where `frieza4` turns hostile; quest 68 (`defeat`) ends the game.
 Reading `activate` as "this hostile character was beaten" fits the data, but it hasn't been observed running. The handler for that event is `sub_08005E12`.
+
+## Live enemy spawn (`src/flight.c`, tested 2026-11-03)
+The per-frame hook now has a table of up to 8 {flag, area entry, enemy record} rows. When a flag becomes set in that area, it calls the record's spawn function and adds the result to the object list, as the area loader does. Each row runs once per area visit.
+Snake Way test, with the flag set by a direct RAM write: enemy count went from 0 to 1, object count from 5 to 6, and the game kept running for 240 more frames while walking. Objects later reached 11, which hasn't been explained.
+Not tested: triggering from a real conversation, removing the NPC, fighting and defeating the enemy, its defeat script, or leaving and re-entering the area.
