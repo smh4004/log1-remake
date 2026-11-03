@@ -111,3 +111,9 @@ The earlier rise to 11 objects didn't recur at this test's dump points and remai
 NPC removal fixed: the lookup is message type 5 with the value from `sub_08000158(index)`. Indexes 40, 135 and 161 each removed a different Snake Way NPC.
 On Snake Way, talking to King Kai ran a real step list that set flag 890; the hook then spawned the enemy and removed him. A closed-loop bot (`tools/chain_test.py`) killed the enemy.
 EXP rose by exactly 1,234 (2,200 to 3,434), and the player levelled up. The player's HP also fell during an earlier fixed-input run, so the enemy attacks.
+
+## Raditz fight test (`tools/raditz_test.py`, 2026-11-03)
+Area 9 on 1:1 and area 10 on 2:1, with LoG1 frames imported at build time on two stand-in actors and a placeholder 300 HP row.
+Talking set flag 890, the enemy spawned and the NPC left the list. The bot killed it in 30 steps, losing 16 HP from 135, and levelled up.
+After the level-up screen was dismissed, flag 891 was set and the area changed to the 2:1 entry, where a new player object was running.
+The player and NPC were placed by RAM write, because the test boots through Buu's Fury's own intro. Not tested: real dialogue, cutscene 3, re-entering mid-fight, animation row mapping by eye, or real balance.
