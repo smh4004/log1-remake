@@ -8,13 +8,13 @@ import collections, json, os, sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__))); sys.path.insert(0, os.path.join(ROOT, 'tools'))
 from convert_log1 import chain, conversations, split_line  # noqa: E402
 
-QF, TF, EF, NOOP = 420, 500, 620, 895
+QF, TF, EF, TOK, NOOP = 420, 500, 620, 870, 895
 WORLD, SENZU = 26, 21
 SPEAKER = dict(goku='goku'); NAME = dict(roshi='Master Roshi', chichi='Chi-Chi', kingkai='King Kai', kingyema='King Yemma', korrin='Korin', popo='Mr. Popo', raditz='Raditz', nappa='Nappa')
 
 
 class Story:
-    QF = QF
+    QF, TF = QF, TF
 
     def __init__(self, log1, last_quest, ids, portraits, scenes_json):
         self.sets = conversations(log1); self.names = [l.split()[1] for l in open(log1 + '/assets/areas/SPRITES.txt')]
@@ -25,7 +25,8 @@ class Story:
         for n in ids:
             for a in json.load(open('%s/assets/areas/area%02d.json' % (log1, n)))['actors']:
                 if a['kind'] != 2: self.area_sets.add(a['param'])
-        self._states()
+        self.area_sets |= {t['after_set'] for x in self.q for t in x['tasks'] if t['type'] == 'escort' and t['area'] in self.ids}
+        self._states(); self._place_groups()
 
     def _states(self):
         """Entries a set can start from later, other than 0."""
@@ -46,7 +47,34 @@ class Story:
             self.state[s] = {}
             for e in sorted(want[s]):
                 if e in self.sets.get(s, {}): self.state[s][e] = f; f += 1
-        assert f <= NOOP, 'conversation flags overflow (%d)' % f
+        assert f <= TOK, 'conversation flags overflow (%d)' % f
+
+    def _place_groups(self):
+        """place_item uses up any pickup of its kind. Items for each group are the unused spawn_items in that area, and a unary counter
+        of token flags tracks how many the player holds. Placing happens on walking into the spot (LoG1 uses a menu)."""
+        self.token = {}; self.tokens = []; used = {t['item'] for x in self.q for t in x['tasks'] if t['type'] == 'talk_with_item'}
+        for x in self.q:
+            for t in x['tasks']:
+                if t['type'] != 'place_item': continue
+                g = next((g for g in self.tokens if g['area'] == t['area'] and g['kind'] == t['kind']), None)
+                if not g:
+                    items = [i['id'] for y in self.q for i in y['tasks'] if i['type'] == 'spawn_item' and i['area'] == t['area'] and i['item'] not in used and y['quest'] <= x['quest']]
+                    g = dict(area=t['area'], kind=t['kind'], items=items, flags=[TOK + sum(len(h['flags']) for h in self.tokens) + k for k in range(len(items))]); self.tokens.append(g)
+                    assert items and g['flags'][-1] < NOOP
+                    for i in items: self.token[i] = g
+
+    def place_lists(self):
+        for x in self.q:
+            for t in x['tasks']:
+                if t['type'] != 'place_item': continue
+                g = next(g for g in self.tokens if g['area'] == t['area'] and g['kind'] == t['kind']); i = t['id']
+                self.doors[t['area']].append(dict(kind='walk', rect=(t['x1'] - 8, t['y1'] - 8, t['x2'] + 8, t['y2'] + 8), list='place_t%d' % i))
+                r = ['list place_t%d' % i, 'set_flag %d' % NOOP, 'if_flag %d pl%d_end' % (TF + i, i)]
+                for k, f in reversed(list(enumerate(g['flags']))): r.append('if_flag %d pl%d_%d' % (f, i, k))
+                r.append('goto pl%d_end' % i)
+                for k, f in enumerate(g['flags']): r += ['label pl%d_%d' % (i, k), 'do call 30 %d' % f, 'goto pl%d_do' % i]
+                r += ['label pl%d_do' % i, 'set_flag %d' % (TF + i), 'narrate You put the item in place.', 'run quest_check', 'label pl%d_end' % i, 'stop']
+                self.out += r
 
     def say(self, body):
         r = []
@@ -101,6 +129,13 @@ class Story:
         r += ['stop']
         return r
 
+    def add_token(self, i):
+        g = self.token.get(i)
+        if not g: return []
+        r = []
+        for k, f in enumerate(g['flags']): r += ['if_flag %d tk%d_%d' % (f, i, k), 'set_flag %d' % f, 'goto tk%d_end' % i, 'label tk%d_%d' % (i, k)]
+        return r + ['label tk%d_end' % i]
+
     def talk_lists(self):
         tasks = collections.defaultdict(list)
         for x in self.q:
@@ -109,7 +144,7 @@ class Story:
             for t in x['tasks']:
                 if t['type'] == 'spawn_item':
                     self.pick[(x['quest'], t['item'])] = t['id']; self.doors[t['area']].append(dict(kind='walk', rect=(t['x'] - 8, t['y'] - 8, t['x'] + 16, t['y'] + 16), list='pick_t%d' % t['id']))
-                    self.out += ['list pick_t%d' % t['id'], 'set_flag %d' % NOOP, 'if_flag %d p%d' % (TF + t['id'], t['id']), 'set_flag %d' % (TF + t['id']), 'narrate You found an item.', 'run quest_check', 'label p%d' % t['id'], 'stop']
+                    self.out += ['list pick_t%d' % t['id'], 'set_flag %d' % NOOP, 'if_flag %d p%d' % (TF + t['id'], t['id']), 'set_flag %d' % (TF + t['id'])] + self.add_token(t['id']) + ['narrate You found an item.', 'run quest_check', 'label p%d' % t['id'], 'stop']
         after = collections.defaultdict(list)
         for x in self.q:
             for t in x['tasks']:
@@ -154,6 +189,6 @@ class Story:
         return put(code + b'\x11')
 
     def generate(self, path):
-        chk = self.check_list(); self.talk_lists(); self.out = chk + self.out
+        chk = self.check_list(); self.talk_lists(); self.place_lists(); self.out = chk + self.out
         open(path, 'w', encoding='utf-8').write('\n'.join(self.out) + '\n')
         return dict(lines=sum(l.startswith('say') or l.startswith('narrate') for l in self.out), steps=len(self.out), doors=sum(map(len, self.doors.values())), hostile=len(self.hostile), walks=len(self.walks), flags_state=sum(map(len, self.state.values())), log=dict(self.log))

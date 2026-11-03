@@ -15,11 +15,19 @@ BF_IDX = dict(roshi=186, bulma=41, krillin1=166, krillin2=166, gohan1=107, gohan
 
 
 def door_dir(a, rect):
-    """The way the player walks into a zone: towards the edge of the zone that is most walled off."""
-    w = a.L['walkable'] > 0; x0, y0, x1, y1 = rect
-    tx0, ty0 = max(x0 // 8, 0), max(y0 // 8, 0); tx1, ty1 = min((x1 - 1) // 8, a.W - 1), min((y1 - 1) // 8, a.H - 1)
-    open_ = dict(up=w[ty0, tx0:tx1 + 1].mean(), down=w[ty1, tx0:tx1 + 1].mean(), left=w[ty0:ty1 + 1, tx0].mean(), right=w[ty0:ty1 + 1, tx1].mean())
-    return min(open_, key=open_.get)
+    """The key that walks through a zone. A zone at the map's edge leaves over that edge, across its short side. Elsewhere the player
+    comes in from the open side, so the key points away from it."""
+    w = a.L['walkable'] > 0; x0, y0, x1, y1 = rect; W, H = a.W * 8, a.H * 8; horiz = x1 - x0 <= y1 - y0
+    edges = dict(left=x0 <= 8, right=x1 >= W - 8, up=y0 <= 8, down=y1 >= H - 8)
+    for k in (('left', 'right', 'up', 'down') if horiz else ('up', 'down', 'left', 'right')):
+        if edges[k]: return k
+    tx0, ty0, tx1, ty1 = x0 // 8, y0 // 8, (x1 - 1) // 8, (y1 - 1) // 8
+    def side(ys, xs):
+        v = w[max(ys[0], 0):min(ys[1], a.H), max(xs[0], 0):min(xs[1], a.W)]; return v.mean() if v.size else 0
+    came = dict(up=side((ty1 + 1, ty1 + 3), (tx0, tx1 + 1)), down=side((ty0 - 2, ty0), (tx0, tx1 + 1)), left=side((ty0, ty1 + 1), (tx1 + 1, tx1 + 3)), right=side((ty0, ty1 + 1), (tx0 - 2, tx0)))
+    if max(x1 - x0, y1 - y0) >= 1.5 * min(x1 - x0, y1 - y0):      # a long zone is crossed through its short side
+        for k in (('left', 'right') if horiz else ('up', 'down')): came[k] += 1
+    return max(came, key=came.get)
 
 
 def fits(a, x, y, bw=16, bh=8):
@@ -85,6 +93,16 @@ def build(r, log1, ids, story, named, actors):
             if (n, sid) in story.hostile:
                 death = story.death_script(n, sid, put); ch = actors.actor(s['sprite'], True); row = actors.row(s['sprite'], death)
                 rec = put(struct.pack('<8I', 0x0800FD55, 0, row, (s['y'] << 16) | s['x'], ch, 0x080555A0, 1, 0x080716EC)); spawns.append((story.hostile[(n, sid)], n, rec, idx))
+        # story characters: waiting until they join the player, then at the escort's end with their after-talk
+        for x in story.q:
+            for t in x['tasks']:
+                if t['type'] == 'spawn_character' and t['area'] == n:
+                    idx = BF_IDX.get(story.names[t['sprite']]) or actors.actor(story.names[t['sprite']], False); f = story.TF + t['id']
+                    offs.append(len(recs)); recs += struct.pack('<9I', 0x0800A223, 0x32, 0x08017DA3, 0x20000 | f, (t['y'] << 16) | t['x'], named.get('talk_set%02d' % t['set'], 0), idx, 1, 0)
+                    spawns.append((f, n, 0, idx))
+                elif t['type'] == 'escort' and t['area'] == n:
+                    sp = story.names[t['follower']]; idx = BF_IDX.get(sp) or actors.actor(sp, False)
+                    offs.append(len(recs)); recs += struct.pack('<9I', 0x0800A223, 0x32, 0x08017DA3, 0x10000 | (story.TF + t['id']), (t['y'] << 16) | t['x'], named.get('talk_set%02d' % t['after_set'], 0), idx, 1, 0)
         objs = []
         if recs:
             blk = put(bytes(recs))

@@ -12,14 +12,14 @@ typedef unsigned char u8; typedef unsigned short u16; typedef unsigned int u32;
 #define KEY_R  0x100
 typedef void (*fn2)(void *, u32); typedef void (*fn0)(void);
 
-/* Live spawn: table of {flag, area entry, record}, ending in flag 0. When a flag becomes set in that area, the enemy
+/* Live spawn: table of {flag, area entry, record or 0, NPC to remove}, ending in flag 0. When a flag becomes set in that area, the enemy
  * record is created as the area loader would (fn(record, index), then added to the object list). Each runs once per visit. */
 #define FLAGS  ((volatile u8 *)0x030010BD)
 #define DONE   ((volatile u8 *)0x0203FF10)   /* 32 bytes, one per table row */
 #define OBJS   ((void *)0x03001C4C)
 typedef struct { u32 flag, area, record, remove; } spawn_t;   /* remove: NPC index to take away, 0 = none */
 /* patched by tools/build_flight.py; volatile so the compiler can't fold the empty initial table */
-__attribute__((section(".text.table"))) volatile const spawn_t spawn_table[8] = {{0, 0, 0, 0}};
+__attribute__((section(".text.table"))) volatile const spawn_t spawn_table[32] = {{0, 0, 0, 0}};
 typedef void *(*spawn_fn)(void *, int); typedef void (*add_fn)(void *, void *); typedef void *(*find_fn)(void *, int, int);
 
 /* Quest-driven collision changes: when a flag is set in that area, mark a tile rectangle walkable in the live floor mask. */
@@ -39,7 +39,7 @@ static void live_walk(int new_area) {
 }
 
 static void live_spawn(int new_area) {
-    for (int i = 0; i < 8 && spawn_table[i].flag; i++) {
+    for (int i = 0; i < 32 && spawn_table[i].flag; i++) {
         volatile const spawn_t *s = &spawn_table[i];
         if (new_area) DONE[i] = 0;
         if (DONE[i] || s->area != AREA) continue;
@@ -55,6 +55,7 @@ static void live_spawn(int new_area) {
             }
         }
         u32 *rec = (u32 *)s->record;
+        if (!rec) continue;                                 /* removal only: a character who started following the player */
         void *obj = ((spawn_fn)rec[0])(rec, 0);
         ((add_fn)0x0801191B)(OBJS, obj);
     }
