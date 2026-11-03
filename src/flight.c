@@ -30,7 +30,7 @@ static void live_spawn(int new_area) {
         if (!(FLAGS[s->flag >> 3] >> (s->flag & 7) & 1)) continue;
         DONE[i] = 1;
         if (s->remove) {
-            void *npc = ((find_fn)0x08011C71)(OBJS, 8, s->remove);
+            void *npc = ((find_fn)0x08011C71)(OBJS, 5, ((int (*)(int))0x08000159)(s->remove));
             if (npc) ((add_fn)0x08011945)(OBJS, npc);
         }
         u32 *rec = (u32 *)s->record;

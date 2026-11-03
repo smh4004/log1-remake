@@ -106,3 +106,8 @@ Snake Way, test enemy on an unused stats row (20 HP, 1,234 EXP) with a death scr
 Enemy count went 0, 1, 0 after A-button attacks, and flag 891 was set, so the fight and death script both ran. EXP gain wasn't read.
 NPC removal failed: the object count only rose by the new enemy, so `find(8, 161)` found nothing or the NPC isn't in this list. The hook still contains this untested path.
 The earlier rise to 11 objects didn't recur at this test's dump points and remains unexplained.
+
+## Hostile-character chain (2026-11-03)
+NPC removal fixed: the lookup is message type 5 with the value from `sub_08000158(index)`. Indexes 40, 135 and 161 each removed a different Snake Way NPC.
+On Snake Way, talking to King Kai ran a real step list that set flag 890; the hook then spawned the enemy and removed him. A closed-loop bot (`tools/chain_test.py`) killed the enemy.
+EXP rose by exactly 1,234 (2,200 to 3,434), and the player levelled up. The player's HP also fell during an earlier fixed-input run, so the enemy attacks.
