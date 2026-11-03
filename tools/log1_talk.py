@@ -2,7 +2,7 @@
 file goes to out/ only.
 
 Each set gets `talk_setNN`. LoG1 keeps a next-entry value per set. Here each reachable entry above 0 has a flag, and the last
-one set wins. Speakers with no confirmed portrait use the narrator box with their name in front of the line.
+one set wins. Portrait ids come from log1_portraits. Speakers without one use the narrator box with their name in front of the line.
 """
 import glob, os, re, sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__))); sys.path.insert(0, os.path.join(ROOT, 'tools'))
@@ -17,7 +17,7 @@ NAME = dict(roshi='Master Roshi', bulma='Bulma', gohan1='Gohan', gohan2='Gohan',
 def clean(t): return t.replace('{', '(').replace('}', ')').strip()
 
 
-def generate(log1, set_ids, path):
+def generate(log1, set_ids, path, portraits=None):
     sets = conversations(log1); flags = {}; out = []; lines = 0
     def flag(s, e):
         k = (s, e)
@@ -36,7 +36,7 @@ def generate(log1, set_ids, path):
         for e, (body, nxt) in sorted(seen.items()):
             out.append('label e%d_%d' % (s, e))
             for l in body:
-                who = SPEAKER.get(l['who']); pre = '' if who else NAME.get(l['who'], l['who'].rstrip('0123456789').title()) + ': '
+                who = 'goku' if l['who'] == 'goku' else ('#%d' % portraits[l['who']] if portraits and l['who'] in portraits else SPEAKER.get(l['who'])); pre = '' if who else NAME.get(l['who'], l['who'].rstrip('0123456789').title()) + ': '
                 for part in split_line(pre + clean(l['text'])): out.append('say %s %s' % (who or 'narrator', part)); lines += 1
             if nxt is not None and nxt != e and nxt in seen and nxt: out.append('set_flag %d' % flag(s, nxt))
             out.append('stop')

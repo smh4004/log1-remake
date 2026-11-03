@@ -130,3 +130,7 @@ Buu's Fury walks the player about 14 px on arrival, which froze the player insid
 Talk lists are generated at build time from LoG1's conversation sets for each area's characters, and lines are split at about 100 characters. Game text stays in out/ only.
 Speakers without a confirmed Buu's Fury portrait use the narrator box with their name in front of the line. Portrait choices are still unverified.
 Tested on Bulma: talking held the player, ran the conversation to its end, and set her next-time flag (620).
+
+## Portraits (`tools/log1_portraits.py`, 2026-11-03)
+Order: Buu's Fury's speaker from the NPC's own talk lists, then portrait numbers from Gero's notes (speaker = number + 8), then LoG2 by script speaker name (table index = speaker - 8). LoG2 portraits are recoloured and reframed at build time from your combo cart.
+Without a route: Bubbles, Chiaotzu, Gregory, King Yemma, Korin, Raditz, Nappa, the Ginyu Force and most generic characters. They use the narrator box with their name for now.
