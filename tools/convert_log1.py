@@ -22,7 +22,7 @@ TASKS = dict(after_quest='generated', after_conversation='generated', defeat='wi
              spawn_item='wired', enter_zone='wired', activate='wired', spawn_character='manual', escort='manual',
              place_item='manual', obstacle='manual')
 ACTIONS = dict(conversation='generated', set_entry='generated', give_exp='generated', give_pickup='generated', music='generated',
-               warp='generated', actor_leave='generated', change_actor='generated', add_warp='wired', learn='wired', add_scene_zone='wired',
+               warp='generated', make_hostile='generated', change_actor='generated', add_warp='wired', learn='wired', add_scene_zone='wired',
                scene='manual', set_walkable='manual', speed_up='manual', end_game='manual')
 
 
@@ -59,6 +59,9 @@ def main():
     log1 = sys.argv[1]; out = os.path.join(ROOT, 'out', 'converted'); os.makedirs(out, exist_ok=True)
     sets = conversations(log1)
     q = json.load(open(log1 + '/assets/story/quests.json'))['quests']
+    for x in q:                                          # older log1-decomp exports call make_hostile actor_leave
+        for a in x['actions']:
+            if a['type'] == 'actor_leave': a['type'] = 'make_hostile'
     areas = [json.load(open(p)) for p in sorted(glob.glob(log1 + '/assets/areas/area*.json'))]
     entry_flag = {}
 
@@ -87,7 +90,7 @@ def main():
             elif k == 'give_pickup': txt += ['# give LoG1 pickup %d (item map: M2)' % a['item'], 'do call 128 0']
             elif k == 'music': txt += ['# LoG1 track %d (music map: M8)' % a['track'], 'do music 0']
             elif k == 'warp': txt += ['# warp LoG1 area %d at %d,%d (area map: M3)' % (a['area'], a['x'], a['y']), 'do call 120 20; call 119 1 1 1 %d %d; call 121 20' % (a['x'], a['y'])]
-            elif k == 'actor_leave': txt.append('# make hostile: LoG1 sprite %d in area %d (spawn the enemy at M4)' % (a['sprite'], a['area'])); txt.append('set_flag %d' % eflag(('hostile', a['area'], a['sprite']), 0))
+            elif k == 'make_hostile': txt.append('# make hostile: LoG1 sprite %d in area %d (spawn the enemy at M4)' % (a['sprite'], a['area'])); txt.append('set_flag %d' % eflag(('hostile', a['area'], a['sprite']), 0))
             elif k == 'change_actor': txt.append('# change sprite set: %d to %d in area %d' % (a['sprite'], a['param'], a['area'])); txt.append('set_flag %d' % eflag(('form', a['area'], a['sprite']), a['param']))
             else: txt.append('# %s %s: %s' % (ACTIONS[k], k, json.dumps({f: v for f, v in a.items() if f not in ('label', 'raw')})))
     path = os.path.join(out, 'quests.scene'); open(path, 'w', encoding='utf-8').write('\n'.join(txt) + '\n')
