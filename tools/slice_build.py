@@ -5,17 +5,22 @@
 import os, struct, sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path[:0] = [os.path.join(ROOT, 'tools'), os.path.join(ROOT, 'vendor', 'gero-tools', 'tools')]
-import log1_areas, scenes  # noqa: E402
+import log1_areas, log1_talk, map_convert as C, scenes, text_tool  # noqa: E402
 
 
 def main():
-    L = sys.argv[1]; r = bytearray(open(os.path.join(ROOT, 'rom', 'bf.gba'), 'rb').read()); r += b'\xff' * (0x1000000 - len(r))
-    tab, skipped = log1_areas.build(r, L, [0, 1]); print('skipped NPCs', skipped)
-    end = len(r); r += bytes(0x10000)
-    sc = [scenes.parse(os.path.join(ROOT, 'src', 'scenes', 'opening.scene'))]
-    scenes.compile_all(r, sc, {}, {'narrator': 0}, end)
+    L = sys.argv[1]; bf = os.path.join(ROOT, 'rom', 'bf.gba'); O = os.path.join(ROOT, 'out', 'slice'); os.makedirs(os.path.join(O, 'text'), exist_ok=True)
+    ids = [0, 1]; sets = sorted({a['param'] for n in ids for a in C.Area(L, n).info['actors'] if a['kind'] != 2})
+    talk = os.path.join(O, 'talk.scene'); print(log1_talk.generate(L, sets, talk))
+    sc = [scenes.parse(os.path.join(ROOT, 'src', 'scenes', 'opening.scene')), scenes.parse(talk)]
+    if not os.path.exists(os.path.join(O, 'text', 'ui.txt')): text_tool.export(bf, os.path.join(O, 'text'))
+    r = bytearray(text_tool.build(bf, os.path.join(O, 'text'), extra=scenes.texts(sc))); print('after text', hex(len(r)))
+    r += b'\xff' * max(0, 0x1000000 - len(r))
+    end = len(r); r += bytes(0x80000)
+    fin = scenes.compile_all(r, sc, text_tool.EXTRA_REFS, scenes.aliases(''), end); del r[(fin + 3) & ~3:]
+    tab, skipped = log1_areas.build(r, L, ids, {int(k[8:]): v for k, v in scenes.NAMED.items() if k.startswith('talk_set')}); print('skipped NPCs', skipped)
     while len(r) % 0x10000: r.append(0xFF)
-    os.makedirs(os.path.join(ROOT, 'out', 'slice'), exist_ok=True); open(os.path.join(ROOT, 'out', 'slice', 'slice.gba'), 'wb').write(r); print('rom', len(r))
+    open(os.path.join(O, 'slice.gba'), 'wb').write(r); print('rom', len(r))
 
 
 if __name__ == '__main__':

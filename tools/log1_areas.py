@@ -1,7 +1,7 @@
 """M4: add LoG1 areas to Buu's Fury as new table entries (world 26, area = LoG1 area + 1).
 
 Each area gets its converted map, warp doors from LoG1's trigger zones, and NPCs whose sprite set has a Buu's Fury character.
-Other NPCs are listed in the return value, not guessed. Talk lists are empty until dialogue lands.
+Other NPCs are listed in the return value, not guessed. Talk lists come from `talk`, keyed by conversation set.
 """
 import json, os, struct, sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -45,7 +45,7 @@ def arrival(a, x, y, key):
     return best
 
 
-def build(r, log1, ids):
+def build(r, log1, ids, talk=None):
     """r: ROM bytearray, at least 16 MB. ids: LoG1 areas to add. Returns (start of new table, skipped NPC list)."""
     cache = {}; moved = []; entries = []; skipped = []; tmpl = next(bytes(r[e:e + 56]) for e in range(AREAS, AREAS + 56 * COUNT, 56) if r[e] == 1 and r[e + 1] == 1); idset = set(ids)
     def put(b):
@@ -66,7 +66,7 @@ def build(r, log1, ids):
         recs = bytearray(); offs = []
         for s in a.info['actors']:
             if s['kind'] == 2 or s['show'] != 0 or s['sprite'] not in BF_IDX: skipped.append((n, s['sprite'], s['kind'], s['show'])); continue
-            offs.append(len(recs)); recs += struct.pack('<9I', 0x0800A223, 0x32, 0x08017DA3, 0x00020002, (s['y'] << 16) | s['x'], 0, BF_IDX[s['sprite']], 1, 0)
+            offs.append(len(recs)); recs += struct.pack('<9I', 0x0800A223, 0x32, 0x08017DA3, 0x00020002, (s['y'] << 16) | s['x'], (talk or {}).get(s['param'], 0), BF_IDX[s['sprite']], 1, 0)
         objs = []
         if recs:
             blk = put(bytes(recs))

@@ -125,3 +125,8 @@ The player and NPC were placed by RAM write, because the test boots through Buu'
 New table entries in world 26 hold converted maps, warp doors and NPCs with Buu's Fury character IDs. Sprite sets without one are skipped and listed.
 The player's live collision box is 16x8. With it, `tools/reach_log1.py` finds all 87 arrival points clear and all 92 walk-mode warps reachable on LoG1's starting masks.
 Buu's Fury walks the player about 14 px on arrival, which froze the player inside a wall at LoG1's exact spot; `arrival()` now compensates. Door direction comes from the most walled-off edge of each zone.
+
+## Dialogue (`tools/log1_talk.py`, 2026-11-03)
+Talk lists are generated at build time from LoG1's conversation sets for each area's characters, and lines are split at about 100 characters. Game text stays in out/ only.
+Speakers without a confirmed Buu's Fury portrait use the narrator box with their name in front of the line. Portrait choices are still unverified.
+Tested on Bulma: talking held the player, ran the conversation to its end, and set her next-time flag (620).
