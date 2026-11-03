@@ -28,3 +28,20 @@ It hasn't run in game: IDs for items, music, speakers and areas are placeholders
 32 quests contain at least one manual item: `scene` 19, `set_walkable` 7, `spawn_character` 6, `escort` 6, `place_item` 6,
 `speed_up` 4, `obstacle` 3, `end_game` 1. 59 dialogue lines exceed about 100 characters and are split automatically.
 All warps point at valid areas, and every area can be reached from the start, a story warp or a warp chain.
+
+## Painted rooms, Method B (decided 2026-11-03)
+All 19 painted rooms convert within the 896-tile limit (341 to 519 unique tiles, about 47-59 KB each stored raw).
+Only area 7 has been run in the emulator.
+
+## In-area flight prototype (2026-11-03)
+Live collision masks: floor pointer at IWRAM 0x03001A4C, air mask at 0x03001A50, working copy at 0x03001A54.
+Writing the air pointer into 0x03001A4C from the harness let the player leave Snake Way's floor and cross the clouds and sky.
+Control runs stayed on the path. Not built yet: the button, the flying animation (slot 15), landing rules, and a code hook;
+the test wrote RAM directly.
+
+## M2 first pass (`tools/audit_log1.py`)
+Name search only, across each game's enemy tables, scouter tables and UI text. Matches need actor IDs confirmed.
+Of 109 LoG1 sprite sets: 46 have a name match, 47 are generic NPCs or enemies, and 16 have no match:
+burter, crab, ginyu, guru, jeice, nail, nappa, oldman, ptero1-3, raditz, recoome, snkqueen, squirrel, wolf.
+Text matches can be mentions rather than sprites; Frieza's four forms match only by name so far.
+LoG1's own sprites could fill gaps at build time: the checked unmatched characters use 16x32, 32x32 or 32x16 frames.
