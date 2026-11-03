@@ -117,3 +117,6 @@ Area 9 on 1:1 and area 10 on 2:1, with LoG1 frames imported at build time on two
 Talking set flag 890, the enemy spawned and the NPC left the list. The bot killed it in 30 steps, losing 16 HP from 135, and levelled up.
 After the level-up screen was dismissed, flag 891 was set and the area changed to the 2:1 entry, where a new player object was running.
 The player and NPC were placed by RAM write, because the test boots through Buu's Fury's own intro. Not tested: real dialogue, cutscene 3, re-entering mid-fight, animation row mapping by eye, or real balance.
+
+## New-game start (`tools/slice_build.py`, 2026-11-03)
+`src/scenes/opening.scene` replaces Buu's Fury's opening list 0x780550, so a new game loads LoG1's area 0 with no RAM writes. Buu's Fury's intro movie still plays before it.
