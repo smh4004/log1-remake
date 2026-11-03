@@ -84,3 +84,8 @@ The other commands aren't named yet.
 All 42 areas now fit, at about 4.74 MB stored raw. Areas 2, 12, 17 and 29 loaded in the emulator without hanging.
 `add_anim` writes LoG1's `tile_anim` as Buu's Fury animated tiles (16 areas use them). On area 0, 4 tiles change in VRAM with the port and none without it.
 Each tile plays at LoG1's speed rounded to whole frames, and a base tile identical to another shares its animation.
+
+## Cutscene commands and bosses (2026-11-03, read from reference C; names are provisional)
+`0800CAC8`/`0800CDF4` create an actor through the area actor loader. `0800DC0C` changes an existing actor's sprite set. `0800DC8A` sets actor byte +0x13.
+`0800CC60` plays a conversation, `0800CC74` plays music, `0800E078` starts a song from the track table. `0800CA74`, `0800CB24`, `0800CC02` and `0800D9C4` act on an existing actor.
+Boss kill targets come from `defeat` tasks, and the actors are placed in area data with story flags. Raditz has no `defeat` task, and frieza2 and frieza3 aren't placed in any area.
