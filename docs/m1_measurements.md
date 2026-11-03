@@ -70,3 +70,11 @@ Match Buu's Fury only where feasible. If a result looks bad, recolour or ask.
 Second test with hand-picked ground patches: area 0's sand swap damaged rocks and palm trunks, so that map stays recoloured.
 Area 4's grass swap replaced 7,643 tiles and needs a decision: it lost flowers and shadows, and its olive ground doesn't match the trees.
 `tools/bfmaps.py` reads Buu's Fury maps with animated tiles or empty chunks (static frames only). LoG1's animated tiles aren't ported yet.
+
+## All areas recoloured (user decision, 2026-11-03)
+Outdoor maps stay recoloured. 38 of 42 areas fit the 896-tile limit, using about 3.5 MB stored raw; areas 2, 12, 17 and 29 are over at 1,022, 946, 1,013 and 917.
+17 areas have animated tiles, which aren't ported yet.
+
+## Cutscene table (`tools/log1_scenes.py`)
+22 table entries read, with 204 commands across 18 command functions. Two of them (0x0800CAC8, 0x0800CDF4) create actors through the area actor loader.
+The other commands aren't named yet.
