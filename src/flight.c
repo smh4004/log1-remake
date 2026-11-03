@@ -47,7 +47,12 @@ static void live_spawn(int new_area) {
         DONE[i] = 1;
         if (s->remove) {
             void *npc = ((find_fn)0x08011C71)(OBJS, 5, ((int (*)(int))0x08000159)(s->remove));
-            if (npc) ((add_fn)0x08011945)(OBJS, npc);
+            if (npc) {   /* NPCs stamp their 16x8 feet into the live masks, and removal leaves the stamp behind */
+                int x = *(int *)((u8 *)npc + 0x1A0) >> 11, y = *(int *)((u8 *)npc + 0x1A4) >> 11;
+                for (int m = 0; m < 3; m++) for (int t = x; t < x + 2; t++) if (t >= 0 && t < 256 && y >= 0 && y < 256)
+                    ((volatile u8 **)0x03001A4C)[m][y * 32 + (t >> 3)] |= 1 << (t & 7);
+                ((add_fn)0x08011945)(OBJS, npc);
+            }
         }
         u32 *rec = (u32 *)s->record;
         void *obj = ((spawn_fn)rec[0])(rec, 0);

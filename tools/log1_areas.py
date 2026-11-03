@@ -8,7 +8,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path[:0] = [os.path.join(ROOT, 'tools'), os.path.join(ROOT, 'vendor', 'gero-tools', 'tools')]
 import map_convert as C  # noqa: E402
 
-BB, WORLD = 0x08000000, 26
+BB, WORLD, MAX_ENEMIES = 0x08000000, 26, 30
 AREAS, COUNT, TABLE_LIT, COUNT_INSN = 0x8E2E0, 452, 0x8A58, 0x125E0     # same values as Gero's tools/areas.py
 # first-listed scouter ID is used until forms are confirmed
 BF_IDX = dict(roshi=186, bulma=41, krillin1=166, krillin2=166, gohan1=107, gohan2=107, gohan3=107, goku=115, chichi=66, piccolo=222, yamcha=302, tien=264, chaitzu=65, kingkai=161, kingyema=163, popo=193, korrin=165, puar=233, dende=77, bubbles=40, gregory=135)
@@ -68,8 +68,11 @@ def build(r, log1, ids, story, named, actors):
             x0, y0, x1, y1 = [max(0, v) for v in d['rect']]; exits.append(struct.pack('<II', 0, put(struct.pack('<IIHHHHI', 0x0800742D, 0x080077DF, x0, y0, x1, y1, named[d['list']]))))
         recs = bytearray(); offs = []; enemy_objs = []
         flags = story.qof
+        # BF's enemy list has 32 slots (0x03001BB4), directly before the player pointer (0x03001C34): a 33rd enemy overwrites it.
+        foes = [s for s in a.info['actors'] if s['kind'] == 2]; keep = {id(foes[i * len(foes) // MAX_ENEMIES]) for i in range(MAX_ENEMIES)} if len(foes) > MAX_ENEMIES else {id(s) for s in foes}
         for s in a.info['actors']:
             cond = 0x20002
+            if s['kind'] == 2 and id(s) not in keep: skipped.append((n, 'enemy', 'over the 32-slot limit')); continue
             if s['show'] == 1: cond = 0x20000 | (story.QF + flags[s['flag']])
             elif s['show'] == 2: cond = 0x10000 | (story.QF + flags[s['flag']])
             sid = story.names.index(s['sprite'])

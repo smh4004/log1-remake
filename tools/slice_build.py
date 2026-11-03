@@ -19,7 +19,10 @@ def main():
     combo = open(os.path.join(ROOT, 'rom', 'log12.gba'), 'rb').read(); log1 = open(os.path.join(ROOT, 'rom', 'log1.gba'), 'rb').read()
     tmp = bytearray(base); tmp += b'\xff' * (0x1000000 - len(tmp)); ptr, nadd = log1_portraits.install(tmp, combo, plan); print('portraits added', nadd)
     st = log1_story.Story(L, LAST_QUEST, IDS, ptr, conv); path = os.path.join(O, 'story.scene'); print(st.generate(path))
-    sc = [scenes.parse(os.path.join(ROOT, 'src', 'scenes', 'opening.scene')), scenes.parse(path)]
+    op = os.path.join(ROOT, 'src', 'scenes', 'opening.scene')
+    if os.environ.get('START'):                          # test builds: START=area,x,y begins somewhere else
+        an, x, y = os.environ['START'].split(','); op2 = os.path.join(O, 'opening_test.scene'); open(op2, 'w').write(open(op).read().replace('call 119 26 1 1 184 72', 'call 119 26 %d 1 %s %s' % (int(an) + 1, x, y))); op = op2
+    sc = [scenes.parse(op), scenes.parse(path)]
     if not os.path.exists(os.path.join(O, 'text', 'ui.txt')): text_tool.export(bf, os.path.join(O, 'text'))
     r = bytearray(text_tool.build(bf, os.path.join(O, 'text'), extra=scenes.texts(sc))); r += b'\xff' * max(0, 0x1000000 - len(r))
     assert log1_portraits.install(r, combo, plan)[0] == ptr
@@ -29,7 +32,7 @@ def main():
     print('actors added', new, 'without frames', act.missing, 'end', hex(cur)); print('arrival moves', [m for m in moved if m[2]]); print('skipped', collections.Counter(s[2] for s in skipped))
     print('hook', build_flight.install(r, spawns, walks), 'spawns', len(spawns), 'walks', len(walks))
     while len(r) % 0x10000: r.append(0xFF)
-    open(os.path.join(O, 'slice.gba'), 'wb').write(r); print('rom', len(r))
+    open(os.path.join(O, os.environ.get('OUT', 'slice') + '.gba'), 'wb').write(r); print('rom', len(r))
 
 
 if __name__ == '__main__':
