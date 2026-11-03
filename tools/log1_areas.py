@@ -6,7 +6,7 @@ Other NPCs are listed in the return value, not guessed. Talk lists come from `ta
 import json, os, struct, sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path[:0] = [os.path.join(ROOT, 'tools'), os.path.join(ROOT, 'vendor', 'gero-tools', 'tools')]
-import map_convert as C  # noqa: E402
+import log1_talk, map_convert as C  # noqa: E402
 
 BB, WORLD = 0x08000000, 26
 AREAS, COUNT, TABLE_LIT, COUNT_INSN = 0x8E2E0, 452, 0x8A58, 0x125E0     # same values as Gero's tools/areas.py
@@ -45,7 +45,7 @@ def arrival(a, x, y, key):
     return best
 
 
-def build(r, log1, ids, talk=None):
+def build(r, log1, ids, talk=None, named=None):
     """r: ROM bytearray, at least 16 MB. ids: LoG1 areas to add. Returns (start of new table, skipped NPC list)."""
     cache = {}; moved = []; entries = []; skipped = []; tmpl = next(bytes(r[e:e + 56]) for e in range(AREAS, AREAS + 56 * COUNT, 56) if r[e] == 1 and r[e + 1] == 1); idset = set(ids)
     def put(b):
@@ -63,6 +63,9 @@ def build(r, log1, ids, talk=None):
                 land = arrival(ta, t['to_x'], t['to_y'], name); assert land, 'no clear arrival in area %d' % t['to_area']
                 moved.append((n, t['to_area'], land[2]))
                 exits.append(struct.pack('<II', 0, put(struct.pack('<IIHHHHII', 0x08007675, 0x0800776D, x0, y0, x1, y1, dest, (land[1] << 16) | land[0]))))
+        for q, (fa, fx, fy) in log1_talk.FIND.items():            # pickups: LoG1 collects them by walking over them
+            if fa != n or not named: continue
+            exits.append(struct.pack('<II', 0, put(struct.pack('<IIHHHHI', 0x0800742D, 0x080077DF, fx - 8, fy - 8, fx + 16, fy + 16, named['find_q%d' % q]))))
         recs = bytearray(); offs = []
         for s in a.info['actors']:
             if s['kind'] == 2 or s['show'] != 0 or s['sprite'] not in BF_IDX: skipped.append((n, s['sprite'], s['kind'], s['show'])); continue

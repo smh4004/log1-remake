@@ -9,3 +9,4 @@ out/
 assets/
 __pycache__/
 tools/harness
+deps/

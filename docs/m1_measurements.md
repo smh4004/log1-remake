@@ -134,3 +134,9 @@ Tested on Bulma: talking held the player, ran the conversation to its end, and s
 ## Portraits (`tools/log1_portraits.py`, 2026-11-03)
 Order: Buu's Fury's speaker from the NPC's own talk lists, then portrait numbers from Gero's notes (speaker = number + 8), then LoG2 by script speaker name (table index = speaker - 8). LoG2 portraits are recoloured and reframed at build time from your combo cart.
 Without a route: Bubbles, Chiaotzu, Gregory, King Yemma, Korin, Raditz, Nappa, the Ginyu Force and most generic characters. They use the narrator box with their name for now.
+
+## Opening quests 0-3 (`tools/quest_test.py`, 2026-11-03)
+Items are collected by walking over them (exit class 0x0800742D, getter 0x080077DF), as in LoG1. A search-with-A version clashed with Bulma standing beside the second item.
+Bot run in the slice build: all three items found, including the one inside Kame House through the real door; all three delivered to Roshi; reward flag set; EXP rose by exactly 350 (2,200 to 2,550); the player could walk afterwards.
+The player is placed by RAM write beside each target. Placeholders: no item graphics, invented pickup text, and Senzu Beans standing in for LoG1's pickups. Not done: scene 0, the conditional warp to area 2, and `set_entry` changes for other characters.
+`setup.sh` is written but hasn't been run from a fresh machine.

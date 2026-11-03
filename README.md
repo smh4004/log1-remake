@@ -5,7 +5,10 @@ The output is a `.bps` patch.
 
 **Never add to this repo:** ROMs, or anything extracted from them (text, sprites, maps, portraits, screenshots). You supply the ROMs and the build reads them.
 
-## Setup
+## Quick start
+`./setup.sh <Buu's Fury> <Legacy of Goku> <LoG I & II combo> <Legacy of Goku II>` installs the tools, fetches the decomps, checks your ROMs and builds `out/slice/slice.gba`.
+
+## Manual setup
 ```sh
 git clone --recursive https://github.com/smh4004/log1-remake && cd log1-remake
 sudo apt-get install gcc-arm-none-eabi binutils-arm-none-eabi libmgba-dev libpng-dev zlib1g-dev
