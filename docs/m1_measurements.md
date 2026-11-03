@@ -55,3 +55,7 @@ Not built or tested: flying animation (slot 15), ki and combat while flying, cha
 ## LoG1 sprite importer (`tools/log1_sprites.py`)
 1,248 of 1,340 frames fit Buu's Fury's 32x32 character limit. 92 frames in 8 character records need boss handling or shrinking.
 One test frame set ran in the emulator on an existing NPC actor. Row-to-animation mapping is a first guess and not confirmed per character.
+
+## M2 audit, ID pass (`tools/audit_log1.py`)
+Actor IDs come from BF's scouter table, which links names to character IDs; text mentions no longer count, which removes Frieza and others.
+These links haven't been checked in game for the right form or age, such as kid Gohan.
