@@ -59,3 +59,8 @@ One test frame set ran in the emulator on an existing NPC actor. Row-to-animatio
 ## M2 audit, ID pass (`tools/audit_log1.py`)
 Actor IDs come from BF's scouter table, which links names to character IDs; text mentions no longer count, which removes Frieza and others.
 These links haven't been checked in game for the right form or age, such as kid Gohan.
+
+## M3 outdoor style test (`tools/map_convert.py`, 2026-11-03)
+Areas 0, 4 and 24 convert with exact layouts: 568, 726 and 568 unique tiles, under the 896 limit. All three recoloured maps loaded in the emulator on Snake Way, and walking moved the player with collision active.
+Automatic 8x8 matching doesn't work: it matched 1 of 756 tiles in area 4, using the one forest donor the loader could read.
+The automatic ground swap replaced 7,913 tiles but chose a tree-canopy patch, so it needs a hand-picked ground patch.
