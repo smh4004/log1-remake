@@ -17,10 +17,10 @@ typedef void (*fn2)(void *, u32); typedef void (*fn0)(void);
 #define FLAGS  ((volatile u8 *)0x030010BD)
 #define DONE   ((volatile u8 *)0x0203FF10)   /* 32 bytes, one per table row */
 #define OBJS   ((void *)0x03001C4C)
-typedef struct { u32 flag, area, record; } spawn_t;
+typedef struct { u32 flag, area, record, remove; } spawn_t;   /* remove: NPC index to take away, 0 = none */
 /* patched by tools/build_flight.py; volatile so the compiler can't fold the empty initial table */
-__attribute__((section(".text.table"))) volatile const spawn_t spawn_table[8] = {{0, 0, 0}};
-typedef void *(*spawn_fn)(void *, int); typedef void (*add_fn)(void *, void *);
+__attribute__((section(".text.table"))) volatile const spawn_t spawn_table[8] = {{0, 0, 0, 0}};
+typedef void *(*spawn_fn)(void *, int); typedef void (*add_fn)(void *, void *); typedef void *(*find_fn)(void *, int, int);
 
 static void live_spawn(int new_area) {
     for (int i = 0; i < 8 && spawn_table[i].flag; i++) {
@@ -29,6 +29,10 @@ static void live_spawn(int new_area) {
         if (DONE[i] || s->area != AREA) continue;
         if (!(FLAGS[s->flag >> 3] >> (s->flag & 7) & 1)) continue;
         DONE[i] = 1;
+        if (s->remove) {
+            void *npc = ((find_fn)0x08011C71)(OBJS, 8, s->remove);
+            if (npc) ((add_fn)0x08011945)(OBJS, npc);
+        }
         u32 *rec = (u32 *)s->record;
         void *obj = ((spawn_fn)rec[0])(rec, 0);
         ((add_fn)0x0801191B)(OBJS, obj);

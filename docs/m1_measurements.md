@@ -100,3 +100,9 @@ Reading `activate` as "this hostile character was beaten" fits the data, but it 
 The per-frame hook now has a table of up to 8 {flag, area entry, enemy record} rows. When a flag becomes set in that area, it calls the record's spawn function and adds the result to the object list, as the area loader does. Each row runs once per area visit.
 Snake Way test, with the flag set by a direct RAM write: enemy count went from 0 to 1, object count from 5 to 6, and the game kept running for 240 more frames while walking. Objects later reached 11, which hasn't been explained.
 Not tested: triggering from a real conversation, removing the NPC, fighting and defeating the enemy, its defeat script, or leaving and re-entering the area.
+
+## Spawn, fight and defeat test (2026-11-03)
+Snake Way, test enemy on an unused stats row (20 HP, 1,234 EXP) with a death script that sets flag 891. Flag 890 was set by RAM write.
+Enemy count went 0, 1, 0 after A-button attacks, and flag 891 was set, so the fight and death script both ran. EXP gain wasn't read.
+NPC removal failed: the object count only rose by the new enemy, so `find(8, 161)` found nothing or the NPC isn't in this list. The hook still contains this untested path.
+The earlier rise to 11 objects didn't recur at this test's dump points and remains unexplained.

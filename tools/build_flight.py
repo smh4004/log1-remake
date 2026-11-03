@@ -5,7 +5,7 @@ ENTRY, CODE = 0x3D4A0, 0xBF0000
 
 
 def install(rom, spawns=()):
-    """spawns: up to 8 (flag, area entry bus address, record bus address) rows for live_spawn."""
+    """spawns: up to 8 (flag, area entry bus address, record bus address, NPC index to remove or 0) rows for live_spawn."""
     d = tempfile.mkdtemp(); o, e, b = (os.path.join(d, n) for n in ('f.o', 'f.elf', 'f.bin'))
     subprocess.check_call(['arm-none-eabi-gcc', '-mthumb', '-mcpu=arm7tdmi', '-Os', '-ffreestanding', '-nostdlib', '-c', os.path.join(ROOT, 'src', 'flight.c'), '-o', o])
     subprocess.check_call(['arm-none-eabi-gcc', '-mthumb', '-mcpu=arm7tdmi', '-nostdlib', '-Wl,-Ttext=0x%X' % (0x08000000 + CODE), '-Wl,-e,flight_keys', o, '-lgcc', '-o', e])
@@ -17,7 +17,7 @@ def install(rom, spawns=()):
     entry = int(next(l.split()[0] for l in syms.splitlines() if l.endswith('flight_keys')), 16)
     rom[ENTRY:ENTRY + 16] = struct.pack('<HHIII', 0x4778, 0x46C0, 0xE59FC000, 0xE12FFF1C, entry | 1)
     tab = int(next(l.split()[0] for l in syms.splitlines() if l.endswith('spawn_table')), 16) - 0x08000000
-    for i, row in enumerate(spawns): struct.pack_into('<3I', rom, tab + 12 * i, *row)
+    for i, row in enumerate(spawns): struct.pack_into('<4I', rom, tab + 16 * i, *row)
     return len(code)
 
 
