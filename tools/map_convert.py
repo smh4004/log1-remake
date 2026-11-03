@@ -11,6 +11,7 @@ from PIL import Image
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, 'tools'))
 import mapkit  # noqa: E402
+sys.path.insert(0, os.path.join(ROOT, 'vendor', 'gero-tools', 'tools'))
 from room_test import lab, TEMPLATE  # noqa: E402
 
 LIMIT, THRESH = 896, 14.0
@@ -86,6 +87,85 @@ def convert(rom, a, mode, donor_tiles):
     uniq = {m.can[i][y:y + 8, x:x + 8].tobytes() for i in (0, 2, 3) for y in range(0, H, 8) for x in range(0, W, 8)}
     stats['tiles'] = len(uniq); stats['size'] = (W, H)
     return m, stats
+
+
+def anim_tiles(rom, a):
+    """LoG1 tile_anim -> [(base tile, [frame tiles])] in BF colours. A slot shows (i & ~mask) + ((i + step) & mask)."""
+    ta = a.info.get('tile_anim') or {}; n = ta.get('count', 0)
+    if not n: return [], 1
+    pal = mapkit.palette(rom)[:256]; P1 = lab(pal)[1:]; first, mask = ta['first_tile'], ta['frames_mask']; img, p = a.sheets[0]; out = []; memo = {}
+    def tile(s):
+        if s not in memo:
+            t = img[(s // 16) * 8:(s // 16) * 8 + 8, (s % 16) * 8:(s % 16) * 8 + 8]
+            q = (1 + ((lab(p[t])[:, :, None] - P1) ** 2).sum(3).argmin(2)).astype(np.uint8); q[t == 0] = 0; memo[s] = q
+        return memo[s]
+    used = {(int(v) & 0x3FFFFFFF) - 1 for name, _ in LAYERS for v in np.unique(a.L[name]) if v}
+    for i in range(n):
+        if first + i not in used: continue
+        frames = [tile(first + (i & ~mask) + ((i + k) & mask)) for k in range(mask + 1)]
+        out.append((tile(first + i), frames))
+    return out, max(1, 64 // max(1, ta['speed']))
+
+
+def add_anim(r, P, anims, duration):
+    """Attach animated-tile defs to the map just written; call before any later data is appended. Returns defs written."""
+    import mapedit
+    from wfz import compress_literal
+    M = P - 4 - mapkit.B; tiles = mapedit.tiles_of(r, M); index = {}
+    for s, t in enumerate(tiles): index.setdefault(canon(t), s)
+    at = (len(r) + 3) & ~3; r += bytes(at - len(r)); defs = []; seen = set()
+    def put(b):
+        nonlocal at
+        o = at; r.extend(b); r.extend(bytes(-len(b) & 3)); at = len(r); return mapkit.B + o
+    for base, frames in anims:
+        s = index.get(canon(base))
+        if s is None or s in seen or base.tobytes() != tiles[s].tobytes(): continue
+        seen.add(s); fp = [put(struct.pack('<I', duration) + compress_literal(f.tobytes())) for f in frames]
+        defs.append(put(struct.pack('<BBH', len(frames), 1, s) + struct.pack('<%dI' % len(fp), *fp)))
+    if defs:
+        struct.pack_into('<I', r, M + 0x10, len(defs)); struct.pack_into('<I', r, M + 0x14, put(struct.pack('<%dI' % len(defs), *defs)))
+    return len(defs)
+
+
+def canon(t):
+    return min(t.tobytes(), t[:, ::-1].tobytes(), t[::-1].tobytes(), t[::-1, ::-1].tobytes())
+
+
+def reduce_tiles(rom, m, limit, keep=()):
+    """Merge the least-used near-identical tiles until the map fits. Tiles must share their transparent pixels.
+    Returns (tiles merged, worst and mean Lab distance per pixel)."""
+    LP = lab(mapkit.palette(rom)[:256]); use = {}; H, W = m.h, m.w; keep = {canon(t) for t in keep}
+    for i in (0, 2, 3):
+        c = m.can[i]
+        for y in range(0, H, 8):
+            for x in range(0, W, 8):
+                k = canon(c[y:y + 8, x:x + 8]); use[k] = use.get(k, 0) + 1
+    if len(use) <= limit: return 0, 0.0, 0.0
+    keys = list(use); T = np.frombuffer(b''.join(keys), np.uint8).reshape(-1, 8, 8); L = LP[T]; O = T > 0
+    alive = np.ones(len(keys), bool); rep = {}; dists = []
+    while alive.sum() > limit:
+        order = sorted(np.nonzero(alive)[0], key=lambda a: use[keys[a]])
+        best = None
+        for a in order[:60]:
+            if not T[a].any() or keys[a] in keep: continue
+            same = alive & (O == O[a]).all((1, 2)); same[a] = False
+            if not same.any(): continue
+            d = np.sqrt(((L[same] - L[a]) ** 2).sum(3)).mean((1, 2)); j = d.argmin()
+            if best is None or d[j] < best[0]: best = (d[j], a, np.nonzero(same)[0][j])
+        d, a, b = best; alive[a] = False; rep[keys[a]] = keys[b]; use[keys[b]] += use[keys[a]]; dists.append(float(d))
+    def final(k):
+        while k in rep: k = rep[k]
+        return k
+    flips = lambda t: (t, t[:, ::-1], t[::-1], t[::-1, ::-1])
+    for i in (0, 2, 3):
+        c = m.can[i]
+        for y in range(0, H, 8):
+            for x in range(0, W, 8):
+                t = c[y:y + 8, x:x + 8]; k = canon(t)
+                if k in rep:
+                    n = np.frombuffer(final(k), np.uint8).reshape(8, 8)
+                    c[y:y + 8, x:x + 8] = min(flips(n), key=lambda f: float(((LP[f] - LP[t]) ** 2).sum()))
+    return len(dists), max(dists), sum(dists) / len(dists)
 
 
 def ground_swap(a, m, patch, hue, sat=.25, val=.35, layers=('bg3 (bottom)',)):

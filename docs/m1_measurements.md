@@ -78,3 +78,9 @@ Outdoor maps stay recoloured. 38 of 42 areas fit the 896-tile limit, using about
 ## Cutscene table (`tools/log1_scenes.py`)
 22 table entries read, with 204 commands across 18 command functions. Two of them (0x0800CAC8, 0x0800CDF4) create actors through the area actor loader.
 The other commands aren't named yet.
+
+## Tile limit and animated tiles (2026-11-03)
+`reduce_tiles` merges the least-used near-identical tiles, aiming for 860 so there's room to spare. Areas 2, 17 and 29 merged 57, 94 and 42 tiles (worst mean Lab distance per pixel 17.9, 13.7, 12.0); area 12 needed none once flipped tiles count as one.
+All 42 areas now fit, at about 4.74 MB stored raw. Areas 2, 12, 17 and 29 loaded in the emulator without hanging.
+`add_anim` writes LoG1's `tile_anim` as Buu's Fury animated tiles (16 areas use them). On area 0, 4 tiles change in VRAM with the port and none without it.
+Each tile plays at LoG1's speed rounded to whole frames, and a base tile identical to another shares its animation.
