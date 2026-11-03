@@ -1,0 +1,11 @@
+# ROMs and anything extracted from them never go in this repo
+*.gba
+*.GBA
+*.sav
+*.ss
+*.bps
+rom/
+out/
+assets/
+__pycache__/
+tools/harness
