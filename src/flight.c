@@ -175,6 +175,30 @@ static void live_follow(int new_area) {
     TRAIL_AT[t * 2] = *(int *)(PLAYER + 0x1A0); TRAIL_AT[t * 2 + 1] = *(int *)(PLAYER + 0x1A4);
 }
 
+/* Walk-in zones beyond what BF's exit list holds (a full list crashes area loads): table of {area, rect, step list} grouped by area, ending in area 0.
+ * A list runs when the player steps into its rectangle, as an exit zone's would. Up to 128 rows per area. */
+typedef struct { u32 area; u16 x0, y0, x1, y1; u32 list; } zone_t;
+__attribute__((section(".text.table"))) volatile const u32 walkin_ptr = 0;
+#define ZFIRST (*(const zone_t *volatile *)0x0203FD00)
+#define ZINSIDE ((volatile u8 *)0x0203FD04)      /* 16 bytes */
+#define ZBUSY  (*(volatile u8 *)0x0203FD14)
+static void live_zones(int new_area) {
+    const zone_t *z = ZFIRST;
+    if (new_area) {
+        ZFIRST = 0; for (int i = 0; i < 16; i++) ZINSIDE[i] = 0;
+        for (z = (const zone_t *)walkin_ptr; z && z->area; z++) if (z->area == AREA) { ZFIRST = z; break; }
+        return;
+    }
+    if (!z || !PLAYER || ZBUSY) return;
+    int px = *(int *)(PLAYER + 0x1A0) >> 8, py = *(int *)(PLAYER + 0x1A4) >> 8;
+    for (int i = 0; i < 128 && z->area == AREA; i++, z++) {
+        int in = px >= z->x0 && px < z->x1 && py >= z->y0 && py < z->y1, was = ZINSIDE[i >> 3] >> (i & 7) & 1;
+        if (in == was) continue;
+        ZINSIDE[i >> 3] ^= 1 << (i & 7);
+        if (in) { u32 zone[6] = {0, 0, 0, 0, 0, z->list}; ZBUSY = 1; ((fn2)0x080073F1)(zone, PLAYER); ZBUSY = 0; return; }
+    }
+}
+
 static void live_walk(int new_area) {
     for (int i = 0; i < 16 && walk_table[i].flag; i++) {
         volatile const walk_t *w = &walk_table[i];
@@ -255,6 +279,7 @@ void flight_keys(u8 *st) {
     live_pick(fresh);
     live_foes(fresh);
     live_hurt();
+    live_zones(fresh);
     live_pending();
     live_follow(fresh);
     if (DEBUG_LIST && PLAYER) { u32 zone[6] = {0, 0, 0, 0, 0, DEBUG_LIST}; DEBUG_LIST = 0; ((fn2)0x080073F1)(zone, PLAYER); }

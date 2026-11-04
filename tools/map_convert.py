@@ -32,7 +32,8 @@ class Area:
         self.sheets = {0: tilesheet('%s/tiles/area%02d.png' % (A, n))}; self.A, self.n = A, n
 
     def sheet(self, x, y):
-        b = self.info['screen_tiles'][(y // 20) * (self.W // 30) + x // 30] if self.info.get('screen_tiles') else 0
+        ox, oy, w = self.info.get('origin', (0, 0, self.W))                 # a cropped temple section keeps using its original screens
+        b = self.info['screen_tiles'][((y + oy) // 20) * (w // 30) + (x + ox) // 30] if self.info.get('screen_tiles') else 0
         p = '%s/tiles/area%02d_block%d.png' % (self.A, self.n, b)
         if b > 1 and os.path.exists(p):
             if b not in self.sheets: self.sheets[b] = tilesheet(p)
@@ -89,6 +90,9 @@ def convert(rom, a, mode, donor_tiles):
     return m, stats
 
 
+MAX_ANIM = 17                                                        # LoG1 maps with 17 load in Buu's Fury; the temple's 29-32 crash the area load
+
+
 def anim_tiles(rom, a):
     """LoG1 tile_anim -> [(base tile, [frame tiles])] in BF colours. A slot shows (i & ~mask) + ((i + step) & mask)."""
     ta = a.info.get('tile_anim') or {}; n = ta.get('count', 0)
@@ -119,7 +123,7 @@ def add_anim(r, P, anims, duration):
         o = at; r.extend(b); r.extend(bytes(-len(b) & 3)); at = len(r); return mapkit.B + o
     for base, frames in anims:
         s = index.get(canon(base))
-        if s is None or s in seen or base.tobytes() != tiles[s].tobytes(): continue
+        if s is None or s in seen or base.tobytes() != tiles[s].tobytes() or len(defs) >= MAX_ANIM: continue
         seen.add(s); fp = [put(struct.pack('<I', duration) + compress_literal(f.tobytes())) for f in frames]
         defs.append(put(struct.pack('<BBH', len(frames), 1, s) + struct.pack('<%dI' % len(fp), *fp)))
     if defs:

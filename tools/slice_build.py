@@ -5,14 +5,14 @@
 import collections, json, os, struct, subprocess, sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path[:0] = [os.path.join(ROOT, 'tools'), os.path.join(ROOT, 'vendor', 'gero-tools', 'tools')]
-import build_flight, log1_actors, log1_areas, log1_portraits, log1_story, log1_world, scenes, text_tool  # noqa: E402
+import log1_split, build_flight, log1_actors, log1_areas, log1_portraits, log1_story, log1_world, scenes, text_tool  # noqa: E402
 
 
-IDS = [int(v) for v in os.environ['IDS'].split(',')] if os.environ.get('IDS') else [0, 1, 2, 4, 5, 6, 7, 8, 9, 10]; LAST_QUEST = int(os.environ.get('LAST_QUEST', 23))
+IDS = [int(v) for v in os.environ['IDS'].split(',')] if os.environ.get('IDS') else log1_split.ids(); LAST_QUEST = int(os.environ.get('LAST_QUEST', 74))
 
 
 def main():
-    DEPS = sys.argv[1]; L = os.path.join(DEPS, 'log1-decomp'); bf = os.path.join(ROOT, 'rom', 'bf.gba'); O = os.path.join(ROOT, 'out', 'slice'); os.makedirs(os.path.join(O, 'text'), exist_ok=True)
+    DEPS = sys.argv[1]; L = log1_split.build(os.path.join(DEPS, 'log1-decomp')); bf = os.path.join(ROOT, 'rom', 'bf.gba'); O = os.path.join(ROOT, 'out', 'slice'); os.makedirs(os.path.join(O, 'text'), exist_ok=True)
     conv = os.path.join(ROOT, 'out', 'converted', 'scenes.json')
     if not os.path.exists(conv): subprocess.check_call([sys.executable, os.path.join(ROOT, 'tools', 'log1_scenes.py')])
     base = bytearray(open(bf, 'rb').read()); plan = log1_portraits.plan(L, os.path.join(DEPS, 'buusfury-decomp'), os.path.join(DEPS, 'log2-decomp'), base)
@@ -30,10 +30,10 @@ def main():
     act = log1_actors.Actors(r, log1, L, 0xC00000)
     idx = {n: (log1_areas.BF_IDX.get(n) or act.actor(n, False)) - 9 for n in st.move_names}   # scene walks name their actors
     end = len(r); r += bytes(0x100000); fin = scenes.compile_all(r, sc, text_tool.EXTRA_REFS, scenes.aliases(''), end, idx); del r[(fin + 3) & ~3:]
-    tab, spawns, walks, picks, foes, zones, skipped, moved, qc, follows = log1_areas.build(r, L, IDS, st, dict(scenes.NAMED), act); new, cur = act.finish()
+    tab, spawns, walks, picks, foes, zones, skipped, moved, qc, follows, walkins = log1_areas.build(r, L, IDS, st, dict(scenes.NAMED), act); new, cur = act.finish()
     print('actors added', new, 'without frames', act.missing, 'end', hex(cur)); print('arrival moves', [m for m in moved if m[2]]); print('skipped', collections.Counter(s[2] for s in skipped))
     print('world map', log1_world.install(r, L, IDS, log1_areas.WORLD)); fly = [(tab + 56 * (log1_areas.COUNT + IDS.index(n)), scenes.NAMED['fly_%d' % n]) for n, _, _ in log1_world.PLACES if n in IDS]
-    print('hook', build_flight.install(r, spawns, walks, picks, foes, zones, qc, follows, fly, log1_world.art(), log1_world.markers()), 'spawns', len(spawns), 'walks', len(walks), 'pickups', len(picks), 'enemies', len(foes), 'hurt zones', len(zones))
+    print('hook', build_flight.install(r, spawns, walks, picks, foes, zones, qc, follows, fly, log1_world.art(), log1_world.markers(), walkins), 'spawns', len(spawns), 'walks', len(walks), 'pickups', len(picks), 'enemies', len(foes), 'hurt zones', len(zones), 'walk-in zones', len(walkins))
     json.dump({n: scenes.NAMED['dbg_%d' % n] for n in IDS}, open(os.path.join(O, os.environ.get('OUT', 'slice') + '.lists.json'), 'w'))
     while len(r) % 0x10000: r.append(0xFF)
     open(os.path.join(O, os.environ.get('OUT', 'slice') + '.gba'), 'wb').write(r); print('rom', len(r))

@@ -54,7 +54,7 @@ def arrival(a, x, y, key):
 
 
 def build(r, log1, ids, story, named, actors):
-    picks = []; foes_out = []; follows = []
+    picks = []; foes_out = []; follows = []; walkins = []
     """Add areas `ids` from the story plan. Returns (table offset, hook spawn rows, hook walk rows, skipped characters)."""
     tmpl = next(bytes(r[e:e + 56]) for e in range(AREAS, AREAS + 56 * COUNT, 56) if r[e] == 1 and r[e + 1] == 1)
     cache = {}; entries = []; skipped = []; idset = set(ids); moved = []; addr = {}; spawns = []; D = {'down': 0, 'up': 1, 'left': 2, 'right': 3}
@@ -74,7 +74,9 @@ def build(r, log1, ids, story, named, actors):
                 x0, y0, x1, y1 = [max(0, v) for v in t['rect']]; exits.append(struct.pack('<II', 0, put(struct.pack('<IIHHHHII', 0x08007675, 0x0800776D, x0, y0, x1, y1, dest, (land[1] << 16) | land[0]))))
         zones_first = []                                     # a quest zone on a door's rectangle has to run before the door takes the player away
         for d in story.doors.get(n, []):
-            x0, y0, x1, y1 = [max(0, v) for v in d['rect']]; zones_first.append(struct.pack('<II', 0, put(struct.pack('<IIHHHHI', 0x0800742D, 0x080077DF, x0, y0, x1, y1, named[d['list']]))))
+            x0, y0, x1, y1 = [max(0, v) for v in d['rect']]
+            if d['list'].startswith(('pk', 'pick_', 'trg', 'obst_', 'place_')): walkins.append((n, x0, y0, x1, y1, named[d['list']])); continue    # quest zones stay real exits, which run before a door on the same spot
+            zones_first.append(struct.pack('<II', 0, put(struct.pack('<IIHHHHI', 0x0800742D, 0x080077DF, x0, y0, x1, y1, named[d['list']]))))
         exits = zones_first + exits
         recs = bytearray(); offs = []; enemy_objs = []
         flags = story.qof
@@ -130,4 +132,4 @@ def build(r, log1, ids, story, named, actors):
     struct.pack_into('<I', r, TABLE_LIT, tab); a_ = min(0xFF, cnt // 2)
     struct.pack_into('<4H', r, COUNT_INSN, 0x2000 | a_, 0x0040, 0x3000 | (cnt - 2 * a_), 0x4770)
     ent = lambda n: tab + 56 * (COUNT + addr[n])
-    return tab, [(f, ent(n), rec, idx, u) for f, n, rec, idx, u in spawns], [(f, ent(n), x1, y1, x2, y2) for f, n, x1, y1, x2, y2 in story.walks if n in idset], [(ent(n), f, x, y, rec) for n, f, x, y, rec in picks], [(ent(n), f, x, y, rec) for n, f, x, y, rec in foes_out], [(ent(n), max(0, x0), max(0, y0), max(0, x1), max(0, y1), d, m) for n, (x0, y0, x1, y1), d, m in story.zones if n in idset], skipped, moved, named['quest_check'], follows
+    return tab, [(f, ent(n), rec, idx, u) for f, n, rec, idx, u in spawns], [(f, ent(n), x1, y1, x2, y2) for f, n, x1, y1, x2, y2 in story.walks if n in idset], [(ent(n), f, x, y, rec) for n, f, x, y, rec in picks], [(ent(n), f, x, y, rec) for n, f, x, y, rec in foes_out], [(ent(n), max(0, x0), max(0, y0), max(0, x1), max(0, y1), d, m) for n, (x0, y0, x1, y1), d, m in story.zones if n in idset], skipped, moved, named['quest_check'], follows, [(ent(n), x0, y0, x1, y1, l) for n, x0, y0, x1, y1, l in walkins]

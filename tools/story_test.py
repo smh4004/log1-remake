@@ -9,10 +9,10 @@ Progress is saved after every quest in <dir>/ckpt. RESUME=1 continues from there
 pointers go stale, so it boots fresh, restores game data (flags, inventory, EXP) and warps through the test lists in <rom>.lists.json.
 A death reloads the last checkpoint and tries the quest again. Run a full pass without RESUME from time to time, as resumed runs skip the earlier quests.
 """
-import collections, hashlib, json, os, shutil, struct, subprocess, sys
+import collections, hashlib, json, os, re, shutil, struct, subprocess, sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__))); H = os.path.join(ROOT, 'vendor', 'gero-tools', 'tools', 'harness')
 rom, D, L, first, last = sys.argv[1:6]; first, last = int(first), int(last); ROM = open(rom, 'rb').read(); BASE = 0x030010BD; QF, TF = 420, 500; cur = ['start']
-names = [l.split()[1] for l in open(L + '/assets/areas/SPRITES.txt')]; Q = json.load(open(L + '/assets/story/quests.json'))['quests']; IDS = list(range(42))
+names = [l.split()[1] for l in open(L + '/assets/areas/SPRITES.txt')]; Q = json.load(open(L + '/assets/story/quests.json'))['quests']; IDS = sorted(int(f[4:6]) for f in os.listdir(L + '/assets/areas') if re.match(r'area\d\d\.json', f) and (int(f[4:6]) != 29 or not os.path.exists(L + '/assets/areas/area42.json')))
 AREAS = {n: json.load(open('%s/assets/areas/area%02d.json' % (L, n))) for n in IDS}
 sys.path[:0] = [os.path.join(ROOT, 'tools'), os.path.join(ROOT, 'vendor', 'gero-tools', 'tools')]
 import map_convert as C  # noqa: E402
@@ -28,7 +28,7 @@ def flag(f): run(['dump _f %08x 1' % (BASE + (f >> 3))]); return rd('_f')[0] >> 
 def setf(f): run(['dump _f %08x 1' % (BASE + (f >> 3))]); step(['w8 %08x %02x' % (BASE + (f >> 3), rd('_f')[0] | 1 << (f & 7))])
 def player(): run(['dump _p 03001c34 4']); return struct.unpack('<I', rd('_p'))[0]
 def area():
-    run(['dump _a 03001980 4']); a = struct.unpack('<I', rd('_a'))[0] - 0x08000000; return ROM[a + 1] - 1 if ROM[a] == 26 else -1
+    run(['dump _a 03001980 4']); a = struct.unpack('<I', rd('_a'))[0] - 0x08000000; return ROM[a + 1] - 1 if 0 <= a < len(ROM) and ROM[a] == 26 else -1
 def pos(): run(['dump _x %08x 8' % (player() + 0x1A0)]); return [v >> 8 for v in struct.unpack('<2i', rd('_x'))]
 def place(x, y): P = player() + 0x1A0; step(['w8 %08x %02x' % (P + i, b) for i, b in enumerate(struct.pack('<2i', x << 8, y << 8))] + ['2', '10'])
 def walk(k, n=30): step(['%d %s' % (n, k), '10'])
@@ -175,6 +175,7 @@ def fight(n, t, f):
             for ox, oy in ((-18, 0), (18, 0), (0, 12), (0, -12), (-30, 0), (30, 0), (0, 24), (0, -24)):
                 if fits(n, e[0] + ox, e[1] + oy): place(e[0] + ox, e[1] + oy); break
         p = pos(); dx, dy = e[0] - p[0], e[1] - p[1]; k = ('RIGHT' if dx > 0 else 'LEFT') if abs(dx) >= abs(dy) else ('DOWN' if dy > 0 else 'UP')
+        if abs(dx) + abs(dy) < 8: walk('DOWN' if k == 'UP' else 'UP' if k == 'DOWN' else 'LEFT' if k == 'RIGHT' else 'RIGHT', 10)   # too close for a punch to connect
         step(['%d %s' % (min(20, max(4, (abs(dx) + abs(dy)) // 2)), k)] if abs(dx) + abs(dy) > 26 else ['4 ' + k, '4 A', '10', '4 A', '10', '4 A', '14'])
         if pos() == p and abs(dx) + abs(dy) > 26: walk(('UP' if i % 2 else 'DOWN') if k in ('LEFT', 'RIGHT') else ('LEFT' if i % 2 else 'RIGHT'), 24)   # blocked: step around
     print('  fight timed out, boss at', at(boss), 'player', pos()); return False
