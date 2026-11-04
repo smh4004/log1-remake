@@ -1,6 +1,6 @@
 """M4 slice build: new game starts on LoG1's area 0. Reads your ROMs and extracted assets; writes out/slice only.
 
-    python3 tools/slice_build.py <folder holding log1-decomp, buusfury-decomp and log2-decomp>
+    python3 tools/slice_build.py <folder holding log1-decomp and buusfury-decomp>
 """
 import collections, json, os, struct, subprocess, sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -15,7 +15,7 @@ def main():
     DEPS = sys.argv[1]; L = log1_split.build(os.path.join(DEPS, 'log1-decomp')); bf = os.path.join(ROOT, 'rom', 'bf.gba'); O = os.path.join(ROOT, 'out', 'slice'); os.makedirs(os.path.join(O, 'text'), exist_ok=True)
     conv = os.path.join(ROOT, 'out', 'converted', 'scenes.json')
     if not os.path.exists(conv): subprocess.check_call([sys.executable, os.path.join(ROOT, 'tools', 'log1_scenes.py')])
-    base = bytearray(open(bf, 'rb').read()); plan = log1_portraits.plan(L, os.path.join(DEPS, 'buusfury-decomp'), os.path.join(DEPS, 'log2-decomp'), base)
+    base = bytearray(open(bf, 'rb').read()); plan = log1_portraits.plan(L, os.path.join(DEPS, 'buusfury-decomp'), base)
     combo = open(os.path.join(ROOT, 'rom', 'log12.gba'), 'rb').read(); log1 = open(os.path.join(ROOT, 'rom', 'log1.gba'), 'rb').read()
     tmp = bytearray(base); tmp += b'\xff' * (0x1000000 - len(tmp)); ptr, nadd = log1_portraits.install(tmp, combo, plan); print('portraits added', nadd)
     bal = log1_balance.Balance(os.path.join(DEPS, 'buusfury-decomp')); st = log1_story.Story(L, LAST_QUEST, IDS, ptr, conv, bal); path = os.path.join(O, 'story.scene'); print(st.generate(path))

@@ -2,7 +2,7 @@
 
 Buu's Fury: an NPC's character ID comes from its spawn record, and its portrait is the speaker its own talk list uses most.
 LoG2: script lines name their speaker ("FRIEZA: ..."), and portrait table index = speaker id - 8.
-    python3 tools/log1_portraits.py <log1-decomp> <buusfury-decomp> <log2-decomp>     # prints the plan, writes out/portraits.json
+    python3 tools/log1_portraits.py <log1-decomp> <buusfury-decomp>     # prints the plan, writes out/portraits.json
 """
 import collections, csv, json, os, re, struct, sys
 import numpy as np
@@ -24,6 +24,8 @@ NAMES = dict(bubbles=('Bubbles', None), bulma=('Bulma', 'BULMA'), chaitzu=('Chia
 
 # Portrait numbers from Gero's RE notes (identified by eye there). Speaker id = number + 8, which matches Krillin's derived id.
 BF_NOTES = dict(piccolo=104, tien=127, yamcha=151, vegeta1=136, vegeta2=136, vegeta3=136)
+# Speaker id each name uses most in LoG2's scripts. Portrait art comes from the combo cart, so a stand-alone LoG2 isn't needed.
+L2_SPEAKERS = {'BULMA': 36, 'CHI-CHI': 43, 'DENDE': 46, 'FRIEZA': 49, 'GOHAN': 2, 'KAMI': 69, 'KRILLIN': 73, 'MASTER ROSHI': 80, 'MR. POPO': 82, 'NAMEK': 85, 'PICCOLO': 3, 'PUAR': 91, 'TIEN': 95, 'VEGETA': 4, 'YAMCHA': 114}
 # LoG2's fixed teen Gohan portrait; LoG1's Gohan is a child, so this one needs checking
 L2_NOTES = dict(gohan1=48, gohan2=48, gohan3=48)
 
@@ -48,29 +50,19 @@ def bf_speakers(r):
     return out
 
 
-def log2_speakers(path):
-    cur = None; c = collections.defaultdict(collections.Counter)
-    for l in open(path, errors='ignore'):
-        m = re.match(r'(0x[0-9A-Fa-f]{2})\s+\(', l)
-        if m: cur = int(m[1], 16); continue
-        m = re.match(r'\s+[#@^!]*([A-Z][A-Z\. #0-9-]{1,18}):', l)
-        if m and cur is not None: c[m[1]][cur] += 1
-    return c
-
-
-def plan(log1, bf, log2, r):
+def plan(log1, bf, r):
     L = [l for l in csv.reader(open(bf + '/assets/tables/scouter.csv')) if l and not l[0].startswith('#')]
     ids = collections.defaultdict(set)
     for row in L[1:]:
         d = dict(zip(L[0], row)); ids[d['_name_text'].strip()].add(int(d['character']))
-    sp = bf_speakers(r); l2 = log2_speakers(log2 + '/assets/scripts/SPEAKERS.txt'); res = {}
+    sp = bf_speakers(r); res = {}
     for s, (bn, ln) in NAMES.items():
         c = collections.Counter()
         for i in ids.get(bn, ()): c.update(sp.get(i, {}))
         if c: res[s] = dict(source='bf', speaker=c.most_common(1)[0][0], votes=c.most_common(1)[0][1]); continue
         if s in BF_NOTES: res[s] = dict(source='bf', speaker=BF_NOTES[s] + 8, votes=0); continue
         if s in L2_NOTES: res[s] = dict(source='log2', index=L2_NOTES[s], name='notes'); continue
-        if ln and l2.get(ln) and l2[ln].most_common(1)[0][0] >= 8: res[s] = dict(source='log2', index=l2[ln].most_common(1)[0][0] - 8, name=ln)
+        if ln in L2_SPEAKERS and L2_SPEAKERS[ln] >= 8: res[s] = dict(source='log2', index=L2_SPEAKERS[ln] - 8, name=ln)
     return res
 
 
@@ -102,7 +94,7 @@ def install(r, combo, res):
 
 
 if __name__ == '__main__':
-    r = bytearray(open(os.path.join(ROOT, 'rom', 'bf.gba'), 'rb').read()); res = plan(*sys.argv[1:4], r)
+    r = bytearray(open(os.path.join(ROOT, 'rom', 'bf.gba'), 'rb').read()); res = plan(*sys.argv[1:3], r)
     os.makedirs(os.path.join(ROOT, 'out'), exist_ok=True); json.dump(res, open(os.path.join(ROOT, 'out', 'portraits.json'), 'w'), indent=1)
     print('bf', {k: (v['speaker'], v['votes']) for k, v in res.items() if v['source'] == 'bf'})
     print('log2', {k: (v['index'], v['name']) for k, v in res.items() if v['source'] == 'log2'})

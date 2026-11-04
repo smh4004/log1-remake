@@ -1,6 +1,6 @@
 @echo off
 setlocal
-rem Builds the Legacy of Goku 1 remake from your own ROM dumps. Put this file in a folder with the four .gba dumps and double-click it.
+rem Builds the Legacy of Goku 1 remake from your own ROM dumps. Put this file in a folder with the three .gba dumps (Buu's Fury, Legacy of Goku, LoG I & II combo) and double-click it.
 rem Tools and working files go in C:\log1build, which you can delete afterwards. Nothing else on your PC changes.
 title Legacy of Goku 1 remake build
 set "ROMDIR=%~dp0"
