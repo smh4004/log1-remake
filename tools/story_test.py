@@ -197,6 +197,18 @@ def fight(n, t, f):
     print('  fight timed out, boss at', at(boss), 'player', pos()); return False
 
 
+def spend_points():
+    """Difficulty runs spend level-up points as a player might: half on strength, half on endurance."""
+    if not os.environ.get('NO_TOPUP'): return
+    run(['dump _g 03001588 8']); g = rd('_g'); s, p, e, sp, pts = g[0], g[1], g[2], g[3], struct.unpack_from('<I', g, 4)[0]
+    if not pts or pts > 2000: return
+    step(['w8 03001588 %02x' % min(255, s + pts // 2), 'w8 0300158a %02x' % min(255, e + pts - pts // 2)] + ['w8 %08x 00' % (0x0300158C + i) for i in range(4)])
+
+
+def status():
+    run(['dump _g 03001574 1c']); g = rd('_g'); return dict(hp=struct.unpack_from('<H', g, 2)[0], max=struct.unpack_from('<H', g, 4)[0], xp=struct.unpack_from('<I', g, 0x10)[0], str=g[0x14], end=g[0x16], pts=struct.unpack_from('<I', g, 0x18)[0])
+
+
 def do_task(t):
     k = t['type']; f = TF + t.get('id', 0)
     if k == 'after_quest' or flag(f): return True
@@ -256,7 +268,7 @@ for attempt in range(3):                                                # numeri
         n = x['quest']; res = []
         if flag(QF + n): continue
         for tries in range(3):
-            res = []
+            res = []; spend_points()
             for t in x['tasks']:
                 ok = do_task(t); free(30); res.append((t['type'], ok, t.get('id')))
                 if not ok: print('  FAILED', t['type'], {k: v for k, v in t.items() if k not in ('label', 'raw', 'type')})
@@ -265,6 +277,7 @@ for attempt in range(3):                                                # numeri
             print('  GAME OVER in quest', n, ': reloading', flush=True); reload()
         done = flag(QF + n)
         print('pass', attempt, 'quest', n, x.get('name'), 'done' if done else 'NOT DONE', [r[1] for r in res], 'area', area(), pos(), flush=True)
+        if os.environ.get('NO_TOPUP'): print('   ', status(), flush=True)
         if done: ckpt(n)
         else: bad.append(x)
     todo = bad
