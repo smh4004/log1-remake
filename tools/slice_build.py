@@ -8,7 +8,7 @@ sys.path[:0] = [os.path.join(ROOT, 'tools'), os.path.join(ROOT, 'vendor', 'gero-
 import build_flight, log1_actors, log1_areas, log1_portraits, log1_story, scenes, text_tool  # noqa: E402
 
 
-IDS = [0, 1, 2, 4, 5, 6, 7, 8, 9, 10]; LAST_QUEST = 23
+IDS = [int(v) for v in os.environ['IDS'].split(',')] if os.environ.get('IDS') else [0, 1, 2, 4, 5, 6, 7, 8, 9, 10]; LAST_QUEST = int(os.environ.get('LAST_QUEST', 23))
 
 
 def main():
