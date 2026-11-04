@@ -29,9 +29,9 @@ def main():
     act = log1_actors.Actors(r, log1, L, 0xC00000)
     idx = {n: (log1_areas.BF_IDX.get(n) or act.actor(n, False)) - 9 for n in st.move_names}   # scene walks name their actors
     end = len(r); r += bytes(0x100000); fin = scenes.compile_all(r, sc, text_tool.EXTRA_REFS, scenes.aliases(''), end, idx); del r[(fin + 3) & ~3:]
-    tab, spawns, walks, picks, foes, zones, skipped, moved, qc = log1_areas.build(r, L, IDS, st, dict(scenes.NAMED), act); new, cur = act.finish()
+    tab, spawns, walks, picks, foes, zones, skipped, moved, qc, follows = log1_areas.build(r, L, IDS, st, dict(scenes.NAMED), act); new, cur = act.finish()
     print('actors added', new, 'without frames', act.missing, 'end', hex(cur)); print('arrival moves', [m for m in moved if m[2]]); print('skipped', collections.Counter(s[2] for s in skipped))
-    print('hook', build_flight.install(r, spawns, walks, picks, foes, zones, qc), 'spawns', len(spawns), 'walks', len(walks), 'pickups', len(picks), 'enemies', len(foes), 'hurt zones', len(zones))
+    print('hook', build_flight.install(r, spawns, walks, picks, foes, zones, qc, follows), 'spawns', len(spawns), 'walks', len(walks), 'pickups', len(picks), 'enemies', len(foes), 'hurt zones', len(zones))
     while len(r) % 0x10000: r.append(0xFF)
     open(os.path.join(O, os.environ.get('OUT', 'slice') + '.gba'), 'wb').write(r); print('rom', len(r))
 

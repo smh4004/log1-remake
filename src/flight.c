@@ -15,11 +15,11 @@ typedef void (*fn2)(void *, u32); typedef void (*fn0)(void);
 /* Live spawn: table of {flag, area entry, record or 0, NPC to remove}, ending in flag 0. When a flag becomes set in that area, the enemy
  * record is created as the area loader would (fn(record, index), then added to the object list). Each runs once per visit. */
 #define FLAGS  ((volatile u8 *)0x030010BD)
-#define DONE   ((volatile u8 *)0x0203FF10)   /* 32 bytes, one per table row */
+#define DONE   ((volatile u8 *)0x0203FF10)   /* 32 bytes, one bit per table row */
 #define OBJS   ((void *)0x03001C4C)
 typedef struct { u32 flag, area, record, remove; } spawn_t;   /* remove: NPC index to take away, 0 = none */
 /* patched by tools/build_flight.py; volatile so the compiler can't fold the empty initial table */
-__attribute__((section(".text.table"))) volatile const spawn_t spawn_table[32] = {{0, 0, 0, 0}};
+__attribute__((section(".text.table"))) volatile const u32 spawn_ptr = 0;
 typedef void *(*spawn_fn)(void *, int); typedef void (*add_fn)(void *, void *); typedef void *(*find_fn)(void *, int, int);
 
 /* Quest-driven collision changes: when a flag is set in that area, mark a tile rectangle walkable in the live floor mask. */
@@ -55,6 +55,11 @@ static void spawn_pick(const pick_t *p, slot_t *s) {
     s->row = p; s->obj = obj; (void)x1; (void)y1;
 }
 
+/* Bit 15 of flag: shown once the flag is set (a placed bridge stone or sapling) rather than until then. */
+static int pick_gone(const pick_t *p) {
+    u32 f = p->flag & 0x7FFF; int set = FLAGS[f >> 3] >> (f & 7) & 1; return p->flag & 0x8000 ? !set : set;
+}
+
 static void live_pick(int new_area) {
     slot_t *S = SLOTS;
     if (new_area) { for (int i = 0; i < MAX_SLOTS; i++) S[i].row = 0; return; }
@@ -64,10 +69,10 @@ static void live_pick(int new_area) {
         const pick_t *p = S[i].row;
         if (!p) continue;
         int dx = p->x - px, dy = p->y - py;
-        if (FLAGS[p->flag >> 3] >> (p->flag & 7) & 1 || dx > 200 || dx < -200 || dy > 160 || dy < -160) { ((add_fn)0x08011945)(OBJS, S[i].obj); S[i].row = 0; }
+        if (pick_gone(p) || dx > 200 || dx < -200 || dy > 160 || dy < -160) { ((add_fn)0x08011945)(OBJS, S[i].obj); S[i].row = 0; }
     }
     for (const pick_t *p = (const pick_t *)pick_ptr; p && p->area; p++) {
-        if (p->area != AREA || FLAGS[p->flag >> 3] >> (p->flag & 7) & 1) continue;
+        if (p->area != AREA || pick_gone(p)) continue;
         int dx = p->x - px, dy = p->y - py, free_ = -1, have = 0;
         if (dx > 160 || dx < -160 || dy > 120 || dy < -120) continue;
         for (int i = 0; i < MAX_SLOTS; i++) { if (S[i].row == p) have = 1; else if (!S[i].row) free_ = i; }
@@ -138,6 +143,37 @@ static void live_pending(void) {
     ((fn2)0x080073F1)(zone, PLAYER);
 }
 
+/* Someone following the player: table of {start flag, end flag, record}, ending in flag 0. They trail the player by TRAIL frames, in every area. */
+typedef struct { u32 start, end, rec; } follow_t;
+__attribute__((section(".text.table"))) volatile const u32 follow_ptr = 0;
+#define FOLLOW (*(void *volatile *)0x0203FF74)
+#define FROW   (*(const follow_t *volatile *)0x0203FF78)
+#define TRAIL_AT ((volatile int *)0x0203FE00)         /* 32 x,y pairs */
+#define TRAIL  (*(volatile u8 *)0x0203FF72)
+static void live_follow(int new_area) {
+    if (new_area) { FOLLOW = 0; FROW = 0; TRAIL = 0; return; }
+    if (!PLAYER) return;
+    const follow_t *want = 0;
+    for (const follow_t *f = (const follow_t *)follow_ptr; f && f->start; f++)
+        if (FLAGS[f->start >> 3] >> (f->start & 7) & 1 && !(FLAGS[f->end >> 3] >> (f->end & 7) & 1)) { want = f; break; }
+    if (FROW != want) {
+        if (FOLLOW) ((add_fn)0x08011945)(OBJS, FOLLOW);
+        FOLLOW = 0; FROW = want;
+        if (want && OBJ_N < 28) {
+            u8 save[3][4];
+            for (int m = 0; m < 3; m++) for (int b = 0; b < 4; b++) save[m][b] = MASKS[m][b];
+            u32 *rec = (u32 *)want->rec; void *o = ((spawn_fn)rec[0])(rec, 0); ((add_fn)0x0801191B)(OBJS, o); FOLLOW = o;
+            for (int m = 0; m < 3; m++) for (int b = 0; b < 4; b++) MASKS[m][b] = save[m][b];
+            int x = *(int *)(PLAYER + 0x1A0), y = *(int *)(PLAYER + 0x1A4);
+            for (int i = 0; i < 32; i++) { TRAIL_AT[i * 2] = x; TRAIL_AT[i * 2 + 1] = y; }
+        }
+    }
+    if (!FOLLOW) return;
+    int t = TRAIL; TRAIL = (t + 1) & 31;
+    *(int *)((u8 *)FOLLOW + 0x1A0) = TRAIL_AT[t * 2]; *(int *)((u8 *)FOLLOW + 0x1A4) = TRAIL_AT[t * 2 + 1];
+    TRAIL_AT[t * 2] = *(int *)(PLAYER + 0x1A0); TRAIL_AT[t * 2 + 1] = *(int *)(PLAYER + 0x1A4);
+}
+
 static void live_walk(int new_area) {
     for (int i = 0; i < 16 && walk_table[i].flag; i++) {
         volatile const walk_t *w = &walk_table[i];
@@ -150,12 +186,12 @@ static void live_walk(int new_area) {
 }
 
 static void live_spawn(int new_area) {
-    for (int i = 0; i < 32 && spawn_table[i].flag; i++) {
-        volatile const spawn_t *s = &spawn_table[i];
-        if (new_area) DONE[i] = 0;
-        if (DONE[i] || s->area != AREA) continue;
+    if (new_area) for (int i = 0; i < 32; i++) DONE[i] = 0;
+    int i = 0;
+    for (const spawn_t *s = (const spawn_t *)spawn_ptr; s && s->flag; s++, i++) {
+        if (DONE[i >> 3] >> (i & 7) & 1 || s->area != AREA) continue;
         if (!(FLAGS[s->flag >> 3] >> (s->flag & 7) & 1)) continue;
-        DONE[i] = 1;
+        DONE[i >> 3] |= 1 << (i & 7);
         if (s->remove) {
             void *npc = ((find_fn)0x08011C71)(OBJS, 5, ((int (*)(int))0x08000159)(s->remove));
             if (npc) remove_npc(npc);
@@ -179,6 +215,8 @@ void flight_keys(u8 *st) {
     live_foes(fresh);
     live_hurt();
     live_pending();
+    live_follow(fresh);
+    if (FLAGS[892 >> 3] >> (892 & 7) & 1) { *(volatile u8 *)0x03007FFA = 0; __asm__("swi 0x00"); }   /* the end: back to the title */
     int r = (k & KEY_R) != 0, pressed = r && !STATE[0]; STATE[0] = r;
     if (!pressed || !PLAYER) return;
     if (STATE[1]) {

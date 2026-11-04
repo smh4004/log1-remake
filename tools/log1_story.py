@@ -48,7 +48,7 @@ class Story:
             for k, p in enumerate(json.load(open('%s/assets/areas/area%02d.json' % (log1, n)))['pickups']): self.pickups[n].append(dict(p, flag=f, list='pk%d_%d' % (n, k))); f += 1
         assert f <= EV, 'pickup flags overflow'
         self.areas = {n: json.load(open('%s/assets/areas/area%02d.json' % (log1, n))) for n in ids}; self.labels = dict(l.rstrip('\n').split('\t', 1) for l in open(log1 + '/assets/text/strings.txt', encoding='latin1') if '\t' in l)
-        self.forms = {}; self.zones = []; self.move_names = set()
+        self.forms = {}; self.zones = []; self.move_names = set(); self.placed = self.placed_items()
         self.hostile_all = {(a['area'], a['sprite']) for x in self.q for a in x['actions'] if a['type'] == 'make_hostile'}
         for n, a in self.areas.items(): self.area_sets |= {t['arg'] for t in a['triggers'] if t['kind'] == 'event'}
 
@@ -86,6 +86,16 @@ class Story:
                     g = dict(area=t['area'], kind=t['kind'], items=items, flags=[TOK + sum(len(h['flags']) for h in self.tokens) + k for k in range(len(items))]); self.tokens.append(g)
                     assert items and g['flags'][-1] < NOOP
                     for i in items: self.token[i] = g
+
+    def placed_items(self):
+        """{area: [(pickup id, task flag, x, y)]}: what each place_item spot shows once used."""
+        out = collections.defaultdict(list); items = {t['id']: t['item'] for x in self.q for t in x['tasks'] if t['type'] == 'spawn_item'}; n_ = collections.Counter()
+        for x in self.q:
+            for t in x['tasks']:
+                if t['type'] == 'place_item':
+                    g = next(g for g in self.tokens if g['area'] == t['area'] and g['kind'] == t['kind']); k = (t['area'], t['kind']); i = g['items'][n_[k] % len(g['items'])]; n_[k] += 1
+                    out[t['area']].append((items[i], TF + t['id'], (t['x1'] + t['x2']) // 2 - 8, (t['y1'] + t['y2']) // 2 - 8))
+        return out
 
     def place_lists(self):
         for x in self.q:
@@ -127,6 +137,8 @@ class Story:
         for c in self.scenes[i]['commands']:
             b = bytes.fromhex(c['raw']); f = c['fn']
             if f == '0800CC61': r += self.say(chain(self.sets[b[0]], b[1])[0]); continue
+            if f == '0800DF15':                                  # the closing text
+                a_ = struct.unpack_from('<I', b)[0] & 0x1FFFFFF; r += ['narrate ' + p for p in split_line(self.rom[a_:self.rom.index(b'\0', a_)].decode('latin1').replace('{', '(').replace('}', ')').strip())]; continue
             if f == '0800CB25' or f == '0800D9C5':
                 a = self.movable(area, b[0])
                 if f == '0800CB25': x, y = struct.unpack_from('<HH', b, 4)
@@ -162,7 +174,7 @@ class Story:
             elif k == 'change_actor':
                 if self.names[a['sprite']] == 'goku': self.log['player sprite change skipped'] += 1
                 else: self.forms[(a['area'], a['sprite'])] = (QF + x['quest'], a['param'])
-            elif k == 'end_game': r.append('narrate THE END'); self.log['credits not done'] += 1
+            elif k == 'end_game': r += ['narrate THE END', 'do call 120 25', 'set_flag 892']; self.log['credits not done'] += 1   # the hook then restarts the game
             elif k in ('learn', 'speed_up'): self.log[k + ' left to the level system'] += 1
             else: self.log['action skipped: ' + k] += 1
         return r

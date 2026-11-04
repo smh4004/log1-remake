@@ -54,6 +54,11 @@ def doors():
     for x in Q:
         for a in x['actions']:
             if a['type'] == 'add_warp' and a['area'] in AREAS and a['to_area'] in AREAS: g[a['area']].append((a['to_area'], (a['x1'], a['y1'], a['x2'], a['y2']), QF + x['quest']))
+    for x in Q:                                                         # a quest zone that warps (Snake Way's fall into Hell, ...)
+        w = next((a for a in x['actions'] if a['type'] == 'warp'), None)
+        if w:
+            for z in x['tasks']:
+                if z['type'] == 'enter_zone' and z['area'] in AREAS: g[z['area']].append((w['area'], (z['x1'], z['y1'], z['x2'], z['y2']), 0))
     return g
 G = doors()
 

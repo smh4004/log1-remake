@@ -54,7 +54,7 @@ def arrival(a, x, y, key):
 
 
 def build(r, log1, ids, story, named, actors):
-    picks = []; foes_out = []
+    picks = []; foes_out = []; follows = []
     """Add areas `ids` from the story plan. Returns (table offset, hook spawn rows, hook walk rows, skipped characters)."""
     tmpl = next(bytes(r[e:e + 56]) for e in range(AREAS, AREAS + 56 * COUNT, 56) if r[e] == 1 and r[e + 1] == 1)
     cache = {}; entries = []; skipped = []; idset = set(ids); moved = []; addr = {}; spawns = []; D = {'down': 0, 'up': 1, 'left': 2, 'right': 3}
@@ -72,8 +72,10 @@ def build(r, log1, ids, story, named, actors):
                 name = door_dir(a, t['rect']); key = D[name]; dest = key | (WORLD << 8) | ((t['to_area'] + 1) << 16) | (1 << 24)
                 land = arrival(get(t['to_area']), t['to_x'], t['to_y'], name); assert land, 'no clear arrival in area %d' % t['to_area']; moved.append((n, t['to_area'], land[2]))
                 x0, y0, x1, y1 = [max(0, v) for v in t['rect']]; exits.append(struct.pack('<II', 0, put(struct.pack('<IIHHHHII', 0x08007675, 0x0800776D, x0, y0, x1, y1, dest, (land[1] << 16) | land[0]))))
+        zones_first = []                                     # a quest zone on a door's rectangle has to run before the door takes the player away
         for d in story.doors.get(n, []):
-            x0, y0, x1, y1 = [max(0, v) for v in d['rect']]; exits.append(struct.pack('<II', 0, put(struct.pack('<IIHHHHI', 0x0800742D, 0x080077DF, x0, y0, x1, y1, named[d['list']]))))
+            x0, y0, x1, y1 = [max(0, v) for v in d['rect']]; zones_first.append(struct.pack('<II', 0, put(struct.pack('<IIHHHHI', 0x0800742D, 0x080077DF, x0, y0, x1, y1, named[d['list']]))))
+        exits = zones_first + exits
         recs = bytearray(); offs = []; enemy_objs = []
         flags = story.qof
         # BF's object list takes 27 area objects (it ends before the table at 0x03001CC8), so enemies and pickups stream in (src/flight.c).
@@ -102,6 +104,9 @@ def build(r, log1, ids, story, named, actors):
                     idx = BF_IDX.get(story.names[t['sprite']]) or actors.actor(story.names[t['sprite']], False); f = story.TF + t['id']
                     offs.append(len(recs)); recs += struct.pack('<9I', 0x0800A223, 0x32, 0x08017DA3, 0x20000 | f, (t['y'] << 16) | t['x'], named.get('talk_set%02d' % t['set'], 0), idx, 1, 0)
                     spawns.append((f, n, 0, idx))
+                    end = next((u for y_ in story.q for u in y_['tasks'] if u['type'] == 'escort' and u['follower'] == t['sprite']), None)
+                    if end:
+                        rec_ = put(struct.pack('<9I', 0x0800A223, 0x32, 0x08017DA3, 0x20002, 0, named['no_talk'], idx, 1, 0)); struct.pack_into('<I', r, rec_ - BB + 32, rec_); follows.append((f, story.TF + end['id'], rec_ + 8))
                 elif t['type'] == 'escort' and t['area'] == n:
                     sp = story.names[t['follower']]; idx = BF_IDX.get(sp) or actors.actor(sp, False)
                     offs.append(len(recs)); recs += struct.pack('<9I', 0x0800A223, 0x32, 0x08017DA3, 0x10000 | (story.TF + t['id']), (t['y'] << 16) | t['x'], named.get('talk_set%02d' % t['after_set'], 0), idx, 1, 0)
@@ -109,6 +114,7 @@ def build(r, log1, ids, story, named, actors):
         def item(i, x, y, f):
             rec = put(struct.pack('<9I', 0x0800A223, 0x32, 0x08017DA3, 0x20002, ((y + 8) << 16) | x, named['no_talk'], actors.pickup(i), 1, 0)); struct.pack_into('<I', r, rec - BB + 32, rec); picks.append((n, f, x, y + 8, rec + 8))
         for p in story.pickups.get(n, []): item(p['id'], p['x'], p['y'], p['flag'])
+        for i_, f_, x_, y_ in story.placed.get(n, []): item(i_, x_, y_, f_ | 0x8000)      # a stone or sapling once placed
         for x_ in story.q:
             for t in x_['tasks']:
                 if t['type'] == 'spawn_item' and t['area'] == n: item(t['item'], t['x'], t['y'], story.TF + t['id'])
@@ -124,4 +130,4 @@ def build(r, log1, ids, story, named, actors):
     struct.pack_into('<I', r, TABLE_LIT, tab); a_ = min(0xFF, cnt // 2)
     struct.pack_into('<4H', r, COUNT_INSN, 0x2000 | a_, 0x0040, 0x3000 | (cnt - 2 * a_), 0x4770)
     ent = lambda n: tab + 56 * (COUNT + addr[n])
-    return tab, [(f, ent(n), rec, idx) for f, n, rec, idx in spawns], [(f, ent(n), x1, y1, x2, y2) for f, n, x1, y1, x2, y2 in story.walks if n in idset], [(ent(n), f, x, y, rec) for n, f, x, y, rec in picks], [(ent(n), f, x, y, rec) for n, f, x, y, rec in foes_out], [(ent(n), max(0, x0), max(0, y0), max(0, x1), max(0, y1), d, m) for n, (x0, y0, x1, y1), d, m in story.zones if n in idset], skipped, moved, named['quest_check']
+    return tab, [(f, ent(n), rec, idx) for f, n, rec, idx in spawns], [(f, ent(n), x1, y1, x2, y2) for f, n, x1, y1, x2, y2 in story.walks if n in idset], [(ent(n), f, x, y, rec) for n, f, x, y, rec in picks], [(ent(n), f, x, y, rec) for n, f, x, y, rec in foes_out], [(ent(n), max(0, x0), max(0, y0), max(0, x1), max(0, y1), d, m) for n, (x0, y0, x1, y1), d, m in story.zones if n in idset], skipped, moved, named['quest_check'], follows
