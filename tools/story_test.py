@@ -86,7 +86,7 @@ def travel(to):
                         place(sx, sy); walk(k, 20); step(['80'])
                         if area() == v: ok = True; break
         if not ok: print('  door failed', n, '->', v, seen[v][1]); return False
-        free()
+        step(['90'])                                                    # no free(): walking up here would go back through the door
 
 
 def touch(n, x, y, want, keys=None):
