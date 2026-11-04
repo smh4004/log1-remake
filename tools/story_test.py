@@ -186,7 +186,11 @@ def fight(n, t, f):
     for i in range(700):
         if os.environ.get('TRACE') and i % 4 == 0: print('   f', i, status()['hp'], 'foes', len(foes()), 'boss', at(boss) if boss in foes() else None, 'me', pos(), flush=True)
         if flag(f) or area() != n: return True
-        if boss not in foes(): step(['2 A', '30']); continue
+        if dead(): return False
+        if boss not in foes():                                          # the one chosen was another of the group, so fight whoever's left instead of standing still
+            L = foes()
+            if not L: step(['2 A', '30']); continue
+            p = pos(); boss = min(L, key=lambda o: abs(at(o)[0] - p[0]) + abs(at(o)[1] - p[1]))
         e = at(boss)
         if i % 8 == 7:                                                  # routes aren't under test: reach a boss hovering over a wall
             for ox, oy in ((-18, 0), (18, 0), (0, 12), (0, -12), (-30, 0), (30, 0), (0, 24), (0, -24)):
