@@ -87,14 +87,14 @@ def build(r, log1, ids, story, named, actors):
             sid = story.names.index(s['sprite'])
             if s['kind'] == 2:
                 d_ = story.death_script(n, sid, put); row = actors.row(s['sprite'], d_ or 0, story.boss_gives_exp(n, sid)); ch = actors.actor(s['sprite'], True)
-                foes_out.append((n, foe_i, s['x'], s['y'], put(struct.pack('<8I', 0x0800FD55, 0 if s['show'] == 0 else cond, row, (s['y'] << 16) | s['x'], ch, 0x080555A0, 1, 0x080716EC)))); foe_i += 1; assert foe_i <= 64; continue
+                beat_ = story.beaten_flag(n, sid); foes_out.append((n, foe_i, s['x'], s['y'], put(struct.pack('<8I', 0x0800FD55, (0x20000 | beat_) if beat_ else 0 if s['show'] == 0 else cond, row, (s['y'] << 16) | s['x'], ch, 0x080555A0, 1, 0x080716EC)))); foe_i += 1; assert foe_i <= 64; continue
             idx = BF_IDX.get(s['sprite']) or actors.actor(s['sprite'], False)
             talk = named.get('talk_set%02d' % s['param'], 0); offs.append(len(recs))
             recs += struct.pack('<9I', 0x0800A223, 0x32, 0x08017DA3, cond, (s['y'] << 16) | s['x'], talk, idx, 1, 0)
             if (n, sid) in story.hostile:
                 def boss(sprite_id, flag, remove):
                     nm = story.names[sprite_id]; d_ = story.death_script(n, sprite_id, put); row = actors.row(nm, d_ or 0, story.boss_gives_exp(n, sprite_id))
-                    spawns.append((flag, n, put(struct.pack('<8I', 0x0800FD55, 0, row, (s['y'] << 16) | s['x'], actors.actor(nm, True), 0x080555A0, 1, 0x080716EC)), remove))
+                    spawns.append((flag, n, put(struct.pack('<8I', 0x0800FD55, 0, row, (s['y'] << 16) | s['x'], actors.actor(nm, True), 0x080555A0, 1, 0x080716EC)), remove, story.beaten_flag(n, sprite_id)))
                 boss(sid, story.hostile[(n, sid)], idx); cur = sid
                 while (n, cur) in story.forms: f_, nxt = story.forms[(n, cur)]; boss(nxt, f_, 0); cur = nxt      # the next form takes over
         # story characters: waiting until they join the player, then at the escort's end with their after-talk
@@ -103,7 +103,7 @@ def build(r, log1, ids, story, named, actors):
                 if t['type'] == 'spawn_character' and t['area'] == n:
                     idx = BF_IDX.get(story.names[t['sprite']]) or actors.actor(story.names[t['sprite']], False); f = story.TF + t['id']
                     offs.append(len(recs)); recs += struct.pack('<9I', 0x0800A223, 0x32, 0x08017DA3, 0x20000 | f, (t['y'] << 16) | t['x'], named.get('talk_set%02d' % t['set'], 0), idx, 1, 0)
-                    spawns.append((f, n, 0, idx))
+                    spawns.append((f, n, 0, idx, 0))
                     end = next((u for y_ in story.q for u in y_['tasks'] if u['type'] == 'escort' and u['follower'] == t['sprite']), None)
                     if end:
                         rec_ = put(struct.pack('<9I', 0x0800A223, 0x32, 0x08017DA3, 0x20002, 0, named['no_talk'], idx, 1, 0)); struct.pack_into('<I', r, rec_ - BB + 32, rec_); follows.append((f, story.TF + end['id'], rec_ + 8))
@@ -130,4 +130,4 @@ def build(r, log1, ids, story, named, actors):
     struct.pack_into('<I', r, TABLE_LIT, tab); a_ = min(0xFF, cnt // 2)
     struct.pack_into('<4H', r, COUNT_INSN, 0x2000 | a_, 0x0040, 0x3000 | (cnt - 2 * a_), 0x4770)
     ent = lambda n: tab + 56 * (COUNT + addr[n])
-    return tab, [(f, ent(n), rec, idx) for f, n, rec, idx in spawns], [(f, ent(n), x1, y1, x2, y2) for f, n, x1, y1, x2, y2 in story.walks if n in idset], [(ent(n), f, x, y, rec) for n, f, x, y, rec in picks], [(ent(n), f, x, y, rec) for n, f, x, y, rec in foes_out], [(ent(n), max(0, x0), max(0, y0), max(0, x1), max(0, y1), d, m) for n, (x0, y0, x1, y1), d, m in story.zones if n in idset], skipped, moved, named['quest_check'], follows
+    return tab, [(f, ent(n), rec, idx, u) for f, n, rec, idx, u in spawns], [(f, ent(n), x1, y1, x2, y2) for f, n, x1, y1, x2, y2 in story.walks if n in idset], [(ent(n), f, x, y, rec) for n, f, x, y, rec in picks], [(ent(n), f, x, y, rec) for n, f, x, y, rec in foes_out], [(ent(n), max(0, x0), max(0, y0), max(0, x1), max(0, y1), d, m) for n, (x0, y0, x1, y1), d, m in story.zones if n in idset], skipped, moved, named['quest_check'], follows

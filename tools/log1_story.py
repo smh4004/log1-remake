@@ -253,6 +253,9 @@ class Story:
                 r.append('stop')
             self.out += r
 
+    def beaten_flag(self, n, sprite):
+        return next((TF + t['id'] for x in self.q for t in x['tasks'] if t['type'] in ('activate', 'defeat') and t['sprite'] == sprite and t['area'] == n), 0)
+
     def boss_gives_exp(self, n, sprite):
         return any(t['type'] in ('activate', 'defeat') and t['sprite'] == sprite and t['area'] == n and any(a['type'] == 'give_exp' for a in x['actions']) for x in self.q for t in x['tasks'])
 
@@ -262,6 +265,17 @@ class Story:
         ts = [t for x in self.q for t in x['tasks'] if t['type'] in ('activate', 'defeat') and t['sprite'] == sprite and t['area'] == n]
         if not ts: return None
         return put(scenes.assemble('; '.join('call 29 %d' % (TF + t['id']) for t in ts) + '; call 29 %d' % PENDING, {}) + b'\x11')
+
+    def test_warps(self):
+        """One warp list per area for tools/story_test.py, so a fixed build can resume from saved progress."""
+        r = []
+        for n, a in self.areas.items():
+            spot = next(((t['to_x'], t['to_y']) for m in self.areas.values() for t in m['triggers'] if t['kind'] == 'warp' and t['to_area'] == n), None)
+            if not spot: spot = next(((b['x'], b['y']) for x in self.q for b in x['actions'] if b['type'] == 'warp' and b['area'] == n), None)
+            if not spot: spot = next(((b['to_x'], b['to_y']) for x in self.q for b in x['actions'] if b['type'] == 'add_warp' and b['to_area'] == n), None)
+            if not spot: spot = next(((t['x'] - 20, t['y']) for t in a['actors']), (64, 64))
+            r += ['list dbg_%d' % n, 'set_flag %d' % NOOP] + self.warp(n, *spot) + ['stop']
+        return r
 
     def zone_lists(self):
         """Walk-in zones: quest zones, artifact spots, LoG1's events, messages, heal zones, warp squares and warps only flying reaches."""
@@ -300,6 +314,6 @@ class Story:
                 self.doors[n].append(dict(kind='walk', rect=rect, list=name))
 
     def generate(self, path):
-        chk = self.check_list(); self.talk_lists(); self.place_lists(); self.pickup_lists(); self.zone_lists(); self.out = chk + self.out + world_lists(self.ids)
+        chk = self.check_list(); self.talk_lists(); self.place_lists(); self.pickup_lists(); self.zone_lists(); self.out = chk + self.out + world_lists(self.ids) + self.test_warps()
         open(path, 'w', encoding='utf-8').write('\n'.join(self.out) + '\n')
         return dict(lines=sum(l.startswith('say') or l.startswith('narrate') for l in self.out), steps=len(self.out), doors=sum(map(len, self.doors.values())), hostile=len(self.hostile), walks=len(self.walks), flags_state=sum(map(len, self.state.values())), log=dict(self.log))

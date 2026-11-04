@@ -4,8 +4,12 @@
     python3 tools/story_test.py out/slice/story.gba <dir> <log1-decomp> <first quest> <last quest>
 
 <dir> needs a `start` save state. The player is placed by RAM write beside each target and kept alive, so routes and balance are not tested.
+
+Progress is saved after every quest in <dir>/ckpt. RESUME=1 continues from there. On the same ROM that's the exact save state. On a rebuilt ROM a state's
+pointers go stale, so it boots fresh, restores game data (flags, inventory, EXP) and warps through the test lists in <rom>.lists.json.
+A death reloads the last checkpoint and tries the quest again. Run a full pass without RESUME from time to time, as resumed runs skip the earlier quests.
 """
-import collections, json, os, struct, subprocess, sys
+import collections, hashlib, json, os, shutil, struct, subprocess, sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__))); H = os.path.join(ROOT, 'vendor', 'gero-tools', 'tools', 'harness')
 rom, D, L, first, last = sys.argv[1:6]; first, last = int(first), int(last); ROM = open(rom, 'rb').read(); BASE = 0x030010BD; QF, TF = 420, 500; cur = ['start']
 names = [l.split()[1] for l in open(L + '/assets/areas/SPRITES.txt')]; Q = json.load(open(L + '/assets/story/quests.json'))['quests']; IDS = list(range(42))
@@ -18,7 +22,7 @@ WALK = {n: C.Area(L, n).L['walkable'] > 0 for n in IDS}; FLY = {n: C.Area(L, n).
 def run(l):
     p = os.path.join(D, '_q.txt'); open(p, 'w').write('\n'.join(['load ' + cur[0]] + l) + '\n'); subprocess.run([H, rom, p, D], capture_output=True)
 def rd(n): return open(os.path.join(D, n + '.bin'), 'rb').read()
-HP = ['w8 %08x %02x' % (0x03001574 + i, b) for i, b in enumerate(struct.pack('<I', 100 << 16))]
+HP = ['w8 %08x %02x' % (0x03001574 + i, b) for i, b in enumerate(struct.pack('<I', 30000 << 16))]
 def step(l): run(HP + l + ['save _n']); cur[0] = '_n'
 def flag(f): run(['dump _f %08x 1' % (BASE + (f >> 3))]); return rd('_f')[0] >> (f & 7) & 1
 def setf(f): run(['dump _f %08x 1' % (BASE + (f >> 3))]); step(['w8 %08x %02x' % (BASE + (f >> 3), rd('_f')[0] | 1 << (f & 7))])
@@ -61,6 +65,14 @@ def doors():
                 if z['type'] == 'enter_zone' and z['area'] in AREAS: g[z['area']].append((w['area'], (z['x1'], z['y1'], z['x2'], z['y2']), 0))
     return g
 G = doors()
+LISTS = json.load(open(rom[:-4] + '.lists.json')) if os.path.exists(rom[:-4] + '.lists.json') else {}
+
+
+def warp(to):
+    """Test list: go straight to an area, for quests whose real route was played before the resume."""
+    if str(to) not in LISTS: return False
+    step(['w8 %08x %02x' % (0x0203FF7C + i, b) for i, b in enumerate(struct.pack('<I', LISTS[str(to)]))] + ['150'])
+    return area() == to
 
 
 def travel(to):
@@ -72,7 +84,9 @@ def travel(to):
             u = todo.pop(0)
             for v, rect, f in G[u]:
                 if v not in seen and (not f or flag(f)): seen[v] = (u, rect); todo.append(v)
-        if to not in seen: print('  no path', n, to); return False
+        if to not in seen:
+            if resumed and warp(to): continue
+            print('  no path', n, to); return False
         v = to
         while seen[v][0] != n: v = seen[v][0]
         x0, y0, x1, y1 = [max(0, r) for r in seen[v][1]]; ok = False
@@ -202,20 +216,40 @@ def do_task(t):
     print('  task type not driven', k); return False
 
 
-for q in range(first): setf(QF + q)
+CK = os.path.join(D, 'ckpt'); os.makedirs(CK, exist_ok=True); SHA = hashlib.sha1(ROM).hexdigest(); PROG = os.path.join(CK, 'progress.json'); GAME = (0x03001068, 0xC8)
+def ckpt(q):
+    run(['dump _g %08x %x' % GAME]); shutil.copy(os.path.join(D, cur[0] + '.ss'), os.path.join(CK, 'last.ss')); json.dump(dict(sha=SHA, quest=q, game=rd('_g').hex()), open(PROG + '.tmp', 'w')); os.replace(PROG + '.tmp', PROG)
+def reload():
+    shutil.copy(os.path.join(CK, 'last.ss'), os.path.join(D, '_ck.ss')); cur[0] = '_ck'
+resumed = False
+if os.environ.get('RESUME') and os.path.exists(PROG):
+    P = json.load(open(PROG)); resumed = True
+    if P['sha'] == SHA: reload(); print('resumed from the save state after quest', P['quest'])
+    else:
+        step(['w8 %08x %02x' % (GAME[0] + i, b) for i, b in enumerate(bytes.fromhex(P['game']))] + ['10']); print('rebuilt ROM: restored game data after quest', P['quest'])
+else:
+    for q in range(first): setf(QF + q)
+    step(['2']); ckpt(-1)
 print('start area', area(), pos())
-todo = Q[first:last + 1]
+def dead(): return area() < 0 or player() == 0
+todo = [x for x in Q[first:last + 1]]
 for attempt in range(3):                                                # numeric order isn't always story order, so later passes retry what was blocked
     bad = []
     for x in todo:
         n = x['quest']; res = []
         if flag(QF + n): continue
-        for t in x['tasks']:
-            ok = do_task(t); free(30); res.append((t['type'], ok, t.get('id')))
-            if not ok: print('  FAILED', t['type'], {k: v for k, v in t.items() if k not in ('label', 'raw', 'type')})
-        free(30); done = flag(QF + n)
+        for tries in range(3):
+            res = []
+            for t in x['tasks']:
+                ok = do_task(t); free(30); res.append((t['type'], ok, t.get('id')))
+                if not ok: print('  FAILED', t['type'], {k: v for k, v in t.items() if k not in ('label', 'raw', 'type')})
+            free(30)
+            if not dead(): break
+            print('  GAME OVER in quest', n, ': reloading', flush=True); reload()
+        done = flag(QF + n)
         print('pass', attempt, 'quest', n, x.get('name'), 'done' if done else 'NOT DONE', [r[1] for r in res], 'area', area(), pos(), flush=True)
-        if not done: bad.append(x)
+        if done: ckpt(n)
+        else: bad.append(x)
     todo = bad
     if not todo: break
 bad = [x['quest'] for x in todo]

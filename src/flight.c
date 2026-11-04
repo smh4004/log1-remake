@@ -17,7 +17,7 @@ typedef void (*fn2)(void *, u32); typedef void (*fn0)(void);
 #define FLAGS  ((volatile u8 *)0x030010BD)
 #define DONE   ((volatile u8 *)0x0203FF10)   /* 32 bytes, one bit per table row */
 #define OBJS   ((void *)0x03001C4C)
-typedef struct { u32 flag, area, record, remove; } spawn_t;   /* remove: NPC index to take away, 0 = none */
+typedef struct { u32 flag, area, record, remove, until; } spawn_t;   /* remove: NPC index to take away, 0 = none */
 /* patched by tools/build_flight.py; volatile so the compiler can't fold the empty initial table */
 __attribute__((section(".text.table"))) volatile const u32 spawn_ptr = 0;
 typedef void *(*spawn_fn)(void *, int); typedef void (*add_fn)(void *, void *); typedef void *(*find_fn)(void *, int, int);
@@ -136,6 +136,7 @@ static void live_hurt(void) {
 /* A story enemy's death script sets flag 893. This runs quest_check as an exit zone would (sub_080073F0): the script reads +0x10 and +0x14 of its zone object. */
 __attribute__((section(".text.table"))) volatile const u32 check_ptr = 0;
 #define PENDING 893
+#define DEBUG_LIST (*(volatile u32 *)0x0203FF7C)   /* the test bot writes a list pointer here to warp; nothing in the game does */
 static void live_pending(void) {
     if (!PLAYER || !(FLAGS[PENDING >> 3] >> (PENDING & 7) & 1)) return;
     FLAGS[PENDING >> 3] &= ~(1 << (PENDING & 7));
@@ -198,6 +199,7 @@ static void live_spawn(int new_area) {
         }
         u32 *rec = (u32 *)s->record;
         if (!rec) continue;                                 /* removal only: a character who started following the player */
+        if (s->until && FLAGS[s->until >> 3] >> (s->until & 7) & 1) continue;   /* a beaten boss stays beaten on later visits */
         void *obj = ((spawn_fn)rec[0])(rec, 0);
         ((add_fn)0x0801191B)(OBJS, obj);
     }
@@ -255,7 +257,7 @@ void flight_keys(u8 *st) {
     live_hurt();
     live_pending();
     live_follow(fresh);
-    if (FLAGS[892 >> 3] >> (892 & 7) & 1) { *(volatile u8 *)0x03007FFA = 0; __asm__("swi 0x00"); }   /* the end: back to the title */
+    if (DEBUG_LIST && PLAYER) { u32 zone[6] = {0, 0, 0, 0, 0, DEBUG_LIST}; DEBUG_LIST = 0; ((fn2)0x080073F1)(zone, PLAYER); }
     live_world(k, fresh);
     int r = (k & KEY_R) != 0, pressed = r && !STATE[0]; STATE[0] = r;
     if (!pressed || !PLAYER || !AREA || *(u8 *)AREA != WORLD_ID) return;
