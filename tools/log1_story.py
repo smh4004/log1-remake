@@ -2,7 +2,7 @@
 
 Flags: quest n = 420 + n, task t = 500 + t, conversation state from 620. A set's state is the entry it starts from next.
 Defaults on the review list: no visible followers on escorts, LoG1 pickups mapped to Buu's Fury items (log1_pickups), cutscenes play only
-their conversations, and music changes are skipped until the music plan (M8).
+their conversations, and LoG1's music plays through log1_music.
 """
 import collections, json, os, struct, sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__))); sys.path.insert(0, os.path.join(ROOT, 'tools'))
@@ -12,6 +12,7 @@ from log1_world import takeoff_lists as world_lists  # noqa: E402
 import log1_side  # noqa: E402
 
 QF, TF, EF, TOK, NOOP = 420, 500, 620, 870, 895
+MUSIC_BASE = 53                                        # log1_music.BASE: LoG1's songs follow Buu's Fury's 53
 EV, PENDING = 720, 893   # one-shot event flags; a story enemy died, so the map-wide zone should run quest_check
 PF = 100                                               # area pickups: PF.. one flag each (Buu's Fury's own story, which used these, is gone)
 WORLD = 26
@@ -141,6 +142,7 @@ class Story:
         for c in self.scenes[i]['commands']:
             b = bytes.fromhex(c['raw']); f = c['fn']
             if f == '0800CC61': r += self.say(chain(self.sets[b[0]], b[1])[0]); continue
+            if f == '0800CC75': r.append('do call 35 %d' % (MUSIC_BASE + b[0])); continue
             if f == '0800DF15':                                  # the closing text
                 a_ = struct.unpack_from('<I', b)[0] & 0x1FFFFFF; r += ['narrate ' + p for p in split_line(self.rom[a_:self.rom.index(b'\0', a_)].decode('latin1').replace('{', '(').replace('}', ')').strip())]; continue
             if f == '0800CB25' or f == '0800D9C5':
@@ -181,6 +183,7 @@ class Story:
                 if self.names[a['sprite']] == 'goku': self.log['player sprite change skipped'] += 1
                 else: self.forms[(a['area'], a['sprite'])] = (QF + x['quest'], a['param'])
             elif k == 'end_game': r += ['do call 120 25', 'do call 209', 'do call 119 %d 1 1 232 240; call 121 30' % WORLD]   # native 0xD1 rolls Buu's Fury's credits, as its own ending does; then free roam from Kame House
+            elif k == 'music': r.append('do call 35 %d' % (MUSIC_BASE + a['track']))
             elif k in ('learn', 'speed_up'): self.log[k + ' left to the level system'] += 1
             else: self.log['action skipped: ' + k] += 1
         return r
