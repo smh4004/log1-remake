@@ -7,7 +7,7 @@ typedef unsigned char u8; typedef unsigned short u16; typedef unsigned int u32;
 #define AIR    (*(volatile u32 *)0x03001A50)
 #define AREA   (*(volatile u32 *)0x03001980)
 #define PLAYER (*(volatile u32 *)0x03001C34)
-#define STATE  ((volatile u8 *)0x0203FF04)   /* 0 R held, 1 flying */
+#define STATE  ((volatile u8 *)0x0203FF04)   /* 0 R held, 1 flying, 2 L held */
 #define LAST   (*(volatile u32 *)0x0203FF08)
 #define KEY_R  0x100
 typedef void (*fn2)(void *, u32); typedef void (*fn0)(void);
@@ -203,6 +203,20 @@ static void live_spawn(int new_area) {
     }
 }
 
+/* World map: rows of {area, take-off list}. L while flying takes off from an Earth area. Each area sets a visited flag, which opens its landing spot. */
+__attribute__((section(".text.table"))) volatile const u32 fly_ptr = 0;
+typedef struct { u32 area, list; } fly_t;
+#define WORLD_ID 26
+#define VISIT 800
+static void live_world(u32 k, int fresh) {
+    if (!AREA || *(u8 *)AREA != WORLD_ID) return;
+    if (fresh) { int f = VISIT + *(u8 *)(AREA + 1) - 1; FLAGS[f >> 3] |= 1 << (f & 7); }
+    int l = (k & 0x200) != 0, pressed = l && !STATE[2]; STATE[2] = l;
+    if (!pressed || !STATE[1] || !PLAYER) return;
+    for (const fly_t *f = (const fly_t *)fly_ptr; f && f->area; f++)
+        if (f->area == AREA) { u32 zone[6] = {0, 0, 0, 0, 0, f->list}; STATE[1] = 0; { u32 t = FLOOR; FLOOR = AIR; AIR = t; } ((fn2)0x080073F1)(zone, PLAYER); return; }
+}
+
 void flight_keys(u8 *st) {
     u32 k = ~(u32)KEYS & 0xFFFF;
     ((fn2)0x0804023D)(st, k);
@@ -217,8 +231,9 @@ void flight_keys(u8 *st) {
     live_pending();
     live_follow(fresh);
     if (FLAGS[892 >> 3] >> (892 & 7) & 1) { *(volatile u8 *)0x03007FFA = 0; __asm__("swi 0x00"); }   /* the end: back to the title */
+    live_world(k, fresh);
     int r = (k & KEY_R) != 0, pressed = r && !STATE[0]; STATE[0] = r;
-    if (!pressed || !PLAYER) return;
+    if (!pressed || !PLAYER || !AREA || *(u8 *)AREA != WORLD_ID) return;
     if (STATE[1]) {
         u32 p = PLAYER; int x = *(int *)(p + 0x1A0) >> 11, y = *(int *)(p + 0x1A4) >> 11;
         if (x < 0 || y < 0 || x > 255 || y > 255) return;

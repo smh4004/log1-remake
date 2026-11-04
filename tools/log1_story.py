@@ -8,9 +8,10 @@ import collections, json, os, struct, sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__))); sys.path.insert(0, os.path.join(ROOT, 'tools'))
 from convert_log1 import chain, conversations, split_line  # noqa: E402
 import log1_pickups as P  # noqa: E402
+from log1_world import takeoff_lists as world_lists  # noqa: E402
 
 QF, TF, EF, TOK, NOOP = 420, 500, 620, 870, 895
-EV, PENDING = 356, 893   # one-shot event flags; a story enemy died, so the map-wide zone should run quest_check
+EV, PENDING = 720, 893   # one-shot event flags; a story enemy died, so the map-wide zone should run quest_check
 PF = 100                                               # area pickups: PF.. one flag each (Buu's Fury's own story, which used these, is gone)
 WORLD = 26
 SPEAKER = dict(goku='goku'); NAME = dict(roshi='Master Roshi', chichi='Chi-Chi', kingkai='King Kai', kingyema='King Yemma', korrin='Korin', popo='Mr. Popo', raditz='Raditz', nappa='Nappa')
@@ -46,7 +47,7 @@ class Story:
         for n in ids:
             self.pickups[n] = []
             for k, p in enumerate(json.load(open('%s/assets/areas/area%02d.json' % (log1, n)))['pickups']): self.pickups[n].append(dict(p, flag=f, list='pk%d_%d' % (n, k))); f += 1
-        assert f <= EV, 'pickup flags overflow'
+        assert f <= 398, 'pickup flags overflow'           # Buu's Fury's world map uses 398-408
         self.areas = {n: json.load(open('%s/assets/areas/area%02d.json' % (log1, n))) for n in ids}; self.labels = dict(l.rstrip('\n').split('\t', 1) for l in open(log1 + '/assets/text/strings.txt', encoding='latin1') if '\t' in l)
         self.forms = {}; self.zones = []; self.move_names = set(); self.placed = self.placed_items()
         self.hostile_all = {(a['area'], a['sprite']) for x in self.q for a in x['actions'] if a['type'] == 'make_hostile'}
@@ -285,7 +286,7 @@ class Story:
                     for x in self.q:
                         for u in x['tasks']:
                             if u['type'] == 'after_conversation' and u['set'] == s_ and u['entry'] == t['entry']: r += ['set_flag %d' % (TF + u['id']), 'run quest_check']
-                    assert once < 420; self.out += ['list ' + name, 'set_flag %d' % NOOP, 'if_flag %d %s_e' % (once, name), 'set_flag %d' % once] + r + ['label %s_e' % name, 'stop']; once += 1
+                    assert once < 800; self.out += ['list ' + name, 'set_flag %d' % NOOP, 'if_flag %d %s_e' % (once, name), 'set_flag %d' % once] + r + ['label %s_e' % name, 'stop']; once += 1
                 elif t['kind'] == 'message':
                     txt = self.labels.get(t['text'])
                     if not txt: self.log['message without text'] += 1; continue
@@ -299,6 +300,6 @@ class Story:
                 self.doors[n].append(dict(kind='walk', rect=rect, list=name))
 
     def generate(self, path):
-        chk = self.check_list(); self.talk_lists(); self.place_lists(); self.pickup_lists(); self.zone_lists(); self.out = chk + self.out
+        chk = self.check_list(); self.talk_lists(); self.place_lists(); self.pickup_lists(); self.zone_lists(); self.out = chk + self.out + world_lists(self.ids)
         open(path, 'w', encoding='utf-8').write('\n'.join(self.out) + '\n')
         return dict(lines=sum(l.startswith('say') or l.startswith('narrate') for l in self.out), steps=len(self.out), doors=sum(map(len, self.doors.values())), hostile=len(self.hostile), walks=len(self.walks), flags_state=sum(map(len, self.state.values())), log=dict(self.log))

@@ -4,7 +4,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ENTRY, CODE = 0x3D4A0, 0xBF0000
 
 
-def install(rom, spawns=(), walks=(), picks=(), foes=(), zones=(), check=0, follows=()):
+def install(rom, spawns=(), walks=(), picks=(), foes=(), zones=(), check=0, follows=(), fly=()):
     """spawns: up to 32 (flag, area entry bus address, record bus address, NPC index to remove or 0) rows for live_spawn."""
     assert len(spawns) <= 256 and len(walks) <= 16
     d = tempfile.mkdtemp(); o, e, b = (os.path.join(d, n) for n in ('f.o', 'f.elf', 'f.bin'))
@@ -29,7 +29,7 @@ def install(rom, spawns=(), walks=(), picks=(), foes=(), zones=(), check=0, foll
     rom[zo:zo + len(z)] = z; pz = int(next(l.split()[0] for l in syms.splitlines() if l.endswith('zone_ptr')), 16) - 0x08000000; struct.pack_into('<I', rom, pz, 0x08000000 + zo)
     def table(sym, at, data):
         rom[at:at + len(data)] = data; struct.pack_into('<I', rom, int(next(l.split()[0] for l in syms.splitlines() if l.endswith(sym)), 16) - 0x08000000, 0x08000000 + at); return at + len(data)
-    e_ = table('spawn_ptr', zo + len(z), b''.join(struct.pack('<4I', *row) for row in spawns) + bytes(16)); e_ = table('follow_ptr', e_, b''.join(struct.pack('<3I', *row) for row in follows) + bytes(12)); assert e_ < 0xBF8000
+    e_ = table('spawn_ptr', zo + len(z), b''.join(struct.pack('<4I', *row) for row in spawns) + bytes(16)); e_ = table('follow_ptr', e_, b''.join(struct.pack('<3I', *row) for row in follows) + bytes(12)); e_ = table('fly_ptr', e_, b''.join(struct.pack('<2I', *row) for row in fly) + bytes(8)); assert e_ < 0xBF8000
     pc = int(next(l.split()[0] for l in syms.splitlines() if l.endswith('check_ptr')), 16) - 0x08000000; struct.pack_into('<I', rom, pc, check)
     return len(code)
 
