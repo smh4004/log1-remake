@@ -6,8 +6,7 @@ set -e
 DIR=$1
 [ -d "$DIR" ] || { echo "Usage: tools/build_all.sh <folder holding the ROM dumps>"; exit 1; }
 BF= L1= COMBO= L2=
-for f in "$DIR"/*.gba "$DIR"/*.GBA; do
-    [ -f "$f" ] || continue
+while IFS= read -r f; do
     case $(sha1sum "$f" | cut -d' ' -f1) in
         f1c4b07554d2a3b1ad2f325307051e775ce68087|e65738e9d67688309f09811a54f495523ec9aada) BF=$f ;;
         a3c8c76742f11fc6a3f6e3fcca20992458cac0b5) L1=$f ;;
@@ -15,7 +14,7 @@ for f in "$DIR"/*.gba "$DIR"/*.GBA; do
         18e0715dec419f3501c301511530d2edcd590f8b) L2=$f ;;
         *) echo "Ignoring $(basename "$f"): not one of the four dumps this build needs." ;;
     esac
-done
+done < <(find "$DIR" -type f -iname '*.gba' ! -iname 'LegacyOfGoku1Remake.gba')
 missing=
 [ -n "$BF" ] || missing="$missing\n  Dragon Ball Z: Buu's Fury (USA)"
 [ -n "$L1" ] || missing="$missing\n  Dragon Ball Z: The Legacy of Goku (USA), stand-alone"
