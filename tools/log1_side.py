@@ -28,11 +28,11 @@ BOUNTIES = [
          paid=["Bounty collected: Mrs. Fluffy, the Mayor's lost kitten.", "In hindsight, the poster did say 'big boned'.", "She was wearing a very stylish shirt. You feel you should have it."]),
 ]
 CHESTS = [
-    dict(area=2, at=(864, 376), gear=50, text="Wool Mittens! A note says: 'Goku, wrap up warm. Love, Chi-Chi. P.S. Study.'"),
+    dict(area=2, at=(904, 408), gear=50, text="Wool Mittens! A note says: 'Goku, wrap up warm. Love, Chi-Chi. P.S. Study.'"),
     dict(area=4, at=(240, 712), gear=14, text="A Halloween Costume! It's a very frightening Goku. You scream a little."),
-    dict(area=5, at=(120, 80), gear=117, text="Rhinestone Sunglasses! You can't see a thing, but you've never looked better."),
-    dict(area=9, at=(800, 256), gear=51, text="Reflective Gloves! Now your enemies can see how sorry they are."),
-    dict(area=22, at=(112, 152), gear=29, text="A Rhinestone Leisure Suit! The army swears it has no idea how this got here."),
+    dict(area=5, at=(136, 32), gear=117, text="Rhinestone Sunglasses! You can't see a thing, but you've never looked better."),
+    dict(area=9, at=(792, 312), gear=51, text="Reflective Gloves! Now your enemies can see how sorry they are."),
+    dict(area=22, at=(104, 152), gear=29, text="A Rhinestone Leisure Suit! The army swears it has no idea how this got here."),
     dict(area=12, at=(992, 144), gear=36, text="A Wet Suit, here in Hell. Some demon has big plans for his day off."),
 ]
 SPIRITS = [
