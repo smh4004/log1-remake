@@ -149,3 +149,8 @@ Pickups use LoG1's art, recoloured at build time, and restore the masks around t
 ## Story route (`tools/story_test.py`, 2026-11-03)
 The bot drives quests through real doors, pickups, talks and bridge pieces, places the player by RAM write beside each target and keeps HP topped up. Walking routes and balance are not tested.
 Door keys: a zone at a map edge leaves over that edge, across its short side. Elsewhere the key points away from the open side. Area 29's warp squares need walk-in zones instead.
+
+## Whole game run (`tools/story_test.py`, 2026-11-04)
+A strict run from a new game, with no test warps, completed all 75 quests on `459a37b0` with no game overs. The bot needed three passes, as LoG1's quest numbers aren't story order. It teleports beside targets and tops up HP, so walking routes and balance are untested.
+Limits found on the way: animated tiles above 17 crash an area load (the temple has 29-32), and the temple's 240x240 map needed splitting. After the credits, native 0xD1 needs an area load behind it or the game sits on a black screen.
+New game starts Goku at level 60 with 135 HP; balancing has to deal with that.
