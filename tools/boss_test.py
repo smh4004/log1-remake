@@ -1,4 +1,4 @@
-"""Boss gauntlet: python3 tools/boss_test.py <dir> <data>. Sets Goku to the level each boss's area expects, using the stats a difficulty run reached, then fights each boss once with no top-ups.
+"""Boss gauntlet: python3 tools/boss_test.py <dir> <data>. Sets Goku to the level each boss's area expects, through the game's own level-ups, then fights each boss once with no top-ups.
 
 Prints time taken, HP left and whether Goku fell. The bot only walks up and punches, so a real player should do better.
 """
@@ -13,9 +13,9 @@ def foes():
 def at(o): run(['dump _x %08x 8' % (o + 0x1A0)]); return [v >> 8 for v in struct.unpack('<2i', rd('_x'))]
 def ohp(o): run(['dump _o %08x 8' % o]); return struct.unpack_from('<I', rd('_o'), 4)[0]
 def hp(): run(['dump _g 03001576 2']); return struct.unpack('<H', rd('_g'))[0]
-def goku(L):
-    h, s, e = 90 + 16 * L, int(18 + 1.35 * L), int(16 + 1.45 * L); lv = 50 + L
-    return ['w8 %08x %02x' % (0x03001576 + i, b) for i, b in enumerate(struct.pack('<HH', h, h))] + ['w8 03001588 %02x' % s, 'w8 0300158a %02x' % e], h
+def level_up(n):
+    """Give Goku the EXP this area expects through the game's own native, so level-ups run for real, then spend the points."""
+    step(['w8 %08x %02x' % (0x0203FF7C + i, b) for i, b in enumerate(struct.pack('<I', LISTS['x%d' % n]))] + ['60']); free(60); spend_points(); run(['dump _g 03001576 2']); return struct.unpack('<H', rd('_g'))[0]
 base = cur[0]; done = set(); rows = []
 for x in Q:
     for a in x['actions']:
@@ -25,10 +25,10 @@ for x in Q:
         if not t: continue
         cur[0] = base
         for f in range(q + 1): setf(QF + f)
-        warp(n); L = B.STAGE[n]; w, h0 = goku(L); step(w + ['20']); npc = next(s for s in AREAS[n]['actors'] if s['sprite'] == want); place(npc['x'] - 30, npc['y']) if fits(n, npc['x'] - 30, npc['y']) else place(npc['x'], npc['y'] + 24); step(['30'])
+        warp(n); L = B.STAGE[n]; h0 = level_up(n); st_ = status(); step(['20']); npc = next(s for s in AREAS[n]['actors'] if s['sprite'] == want); place(npc['x'] - 30, npc['y']) if fits(n, npc['x'] - 30, npc['y']) else place(npc['x'], npc['y'] + 24); step(['30'])
         L_ = foes(); boss = min(L_, key=lambda o: abs(at(o)[0] - npc['x']) + abs(at(o)[1] - npc['y'])) if L_ else None
         if not boss: print(want, 'no boss'); continue
-        start = ohp(boss); frames = 0; low = h0; res = 'timeout'; f = TF + t['id']
+        frames = 0; low = h0; res = 'timeout'; f = TF + t['id']
         for i in range(150):
             if flag(f): res = 'won'; break
             if area() != n or player() == 0: res = 'GOKU FELL'; break
@@ -38,4 +38,4 @@ for x in Q:
                 for ox, oy in ((-14, 0), (14, 0), (0, 12), (0, -12)):
                     if fits(n, e[0] + ox, e[1] + oy): place(e[0] + ox, e[1] + oy); break
             step(['4 ' + k, '4 A', '10', '4 A', '10', '4 A', '14']); frames += 46; low = min(low, hp())
-        print('%-10s area %2d level %2d boss HP %5d  %-9s %3ds  Goku HP left %d/%d' % (want, n, L, start, res, frames // 60, low, h0), flush=True)
+        print('%-10s area %2d level %2d str %3d end %3d  %-9s %3ds  Goku HP left %d/%d' % (want, n, L, st_['str'], st_['end'], res, frames // 60, low, h0), flush=True)

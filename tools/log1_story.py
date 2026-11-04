@@ -273,6 +273,10 @@ class Story:
         if not ts: return None
         return put(scenes.assemble('; '.join('call 29 %d' % (TF + t['id']) for t in ts) + '; call 29 %d' % PENDING, {}) + b'\x11')
 
+    def bal_level(self, n):
+        import log1_balance
+        return log1_balance.STAGE.get(n, 10)
+
     def test_warps(self):
         """One warp list per area for tools/story_test.py, so a fixed build can resume from saved progress."""
         r = []
@@ -282,6 +286,7 @@ class Story:
             if not spot: spot = next(((b['to_x'], b['to_y']) for x in self.q for b in x['actions'] if b['type'] == 'add_warp' and b['to_area'] == n), None)
             if not spot: spot = next(((t['x'] - 20, t['y']) for t in a['actors']), (64, 64))
             r += ['list dbg_%d' % n, 'set_flag %d' % NOOP] + self.warp(n, *spot) + ['stop']
+            if self.bal: r += ['list dbgx_%d' % n, 'set_flag %d' % NOOP, 'do call 194 %d' % self.bal.exp[self.bal_level(n) + 1], 'stop']
         return r
 
     def zone_lists(self):
