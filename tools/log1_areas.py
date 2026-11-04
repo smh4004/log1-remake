@@ -87,6 +87,7 @@ def build(r, log1, ids, story, named, actors):
             if s['show'] == 1: cond = 0x20000 | (story.QF + flags[s['flag']])
             elif s['show'] == 2: cond = 0x10000 | (story.QF + flags[s['flag']])
             sid = story.names.index(s['sprite'])
+            if s['kind'] == 2 and (n, sid) in {(k[0], v[1]) for k, v in story.forms.items()}: continue   # this form arrives when the one before it falls (Vegeta)
             if s['kind'] == 2:
                 d_ = story.death_script(n, sid, put); row = actors.row(s['sprite'], d_ or 0, story.boss_gives_exp(n, sid)); ch = actors.actor(s['sprite'], True)
                 beat_ = story.beaten_flag(n, sid); foes_out.append((n, foe_i, s['x'], s['y'], put(struct.pack('<8I', 0x0800FD55, (0x20000 | beat_) if beat_ else 0 if s['show'] == 0 else cond, row, (s['y'] << 16) | s['x'], ch, 0x080555A0, 1, 0x080716EC)))); foe_i += 1; assert foe_i <= 64; continue
