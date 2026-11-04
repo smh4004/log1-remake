@@ -267,7 +267,7 @@ else:
 print('start area', area(), pos())
 def dead(): return area() < 0 or player() == 0
 todo = [x for x in Q[first:last + 1]]
-for attempt in range(3):                                                # numeric order isn't always story order, so later passes retry what was blocked
+for attempt in range(4):                                                # numeric order isn't always story order, so later passes retry what was blocked
     bad = []
     for x in todo:
         n = x['quest']; res = []
