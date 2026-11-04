@@ -217,6 +217,34 @@ static void live_world(u32 k, int fresh) {
         if (f->area == AREA) { u32 zone[6] = {0, 0, 0, 0, 0, f->list}; STATE[1] = 0; { u32 t = FLOOR; FLOOR = AIR; AIR = t; } ((fn2)0x080073F1)(zone, PLAYER); return; }
 }
 
+/* The draw pass (sub_0801157E) rebuilt here so the world map's HUD can add to it: copy the OAM shadow to OAM, then draw each listed object's VRAM.
+ * On the map, Namek's frame replaces the Lookout's in VRAM and each visited place gets a marker on the minimap. */
+__attribute__((section(".text.table"))) volatile const u32 art_ptr = 0, mark_ptr = 0;
+typedef struct { u16 flag; u8 x, y; } mark_t;
+#define OAM ((volatile u16 *)0x03003498)
+#define LOOKOUT_TILE 662
+#define MARK_TILE 440
+#define MARK_FIRST 118
+void flight_draw(int list) {
+    int map = AREA && *(u8 *)AREA == 0 && *(u8 *)(AREA + 1) == 50;
+    if (map) {
+        int e = MARK_FIRST;
+        for (const mark_t *m = (const mark_t *)mark_ptr; m && m->flag && e < 128; m++) {
+            if (!(FLAGS[m->flag >> 3] >> (m->flag & 7) & 1)) continue;
+            OAM[e * 4] = m->y | 0x2000; OAM[e * 4 + 1] = m->x; OAM[e * 4 + 2] = MARK_TILE; e++;
+        }
+    }
+    ((void (*)(void *))0x0803DA63)((void *)OAM);       /* copies the shadow to OAM */
+    int *p = (int *)(list + 0x208); int n = *p;
+    while (n > 0) { int *o = (int *)p[n]; n--; int v = *o; ((void (*)(void *))(v + *(int *)(v + 0x14)))(o); }
+    *p = 0;
+    if (!map) return;
+    const u32 *a = (const u32 *)art_ptr; volatile u32 *d = (volatile u32 *)(0x06010000 + LOOKOUT_TILE * 32);
+    for (int i = 0; i < 256; i++) d[i] = a[i];
+    d = (volatile u32 *)(0x06010000 + MARK_TILE * 32);
+    for (int i = 0; i < 16; i++) d[i] = a[256 + i];
+}
+
 void flight_keys(u8 *st) {
     u32 k = ~(u32)KEYS & 0xFFFF;
     ((fn2)0x0804023D)(st, k);
