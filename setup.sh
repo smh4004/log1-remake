@@ -1,6 +1,7 @@
 #!/bin/sh
 # One-time setup and slice build on Debian/Ubuntu or WSL. Run from the repo root, with your own ROM dumps:
 #   ./setup.sh <Buu's Fury dump> <Legacy of Goku dump> <LoG I & II combo dump> <Legacy of Goku II dump>
+# Other way, without Linux on Windows: windows/build_game.bat
 # ROMs and everything extracted from them stay in rom/, deps/ and out/, which git ignores. The result is out/slice/slice.gba.
 set -e
 [ $# -eq 4 ] || { sed -n 2,3p "$0"; exit 1; }
