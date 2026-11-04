@@ -1,7 +1,7 @@
 """New side content for the remake, in the series' sillier spirit: a bounty board, hidden gear and more lost spirits. All text here is original.
 
 Bounty board (City): talk to Officer Pudding to open five bounties around the world, with EXP for each and a shirt for the last.
-Hidden gear: capsules in pockets only flight reaches, each with a piece of Buu's Fury's sillier equipment. Gear drops at Goku's feet (native 143).
+Hidden gear: capsules in pockets only flight reaches, each with a piece of Buu's Fury's sillier equipment. Gear goes straight into the equipment list (native 0x93).
 Lost Spirits, extended (Hell): three more spirits to walk to the attendant once Gathered Spirits is done, then a fight with Head Demon Steve.
 
 HP and EXP are placeholders until the balancing pass. Flags 340-365.
@@ -57,7 +57,7 @@ class Side:
     def add_pickups(self):
         """Hidden capsules go through the same streaming as LoG1's pickups."""
         for i, c in enumerate(CHESTS):
-            if c['area'] in self.st.pickups: self.st.pickups[c['area']].append(dict(x=c['at'][0], y=c['at'][1], id=21, flag=CHEST + i, list='side_chest%d' % i, side=say(None, c['text']) + ['do call 143 %d' % c['gear']]))
+            if c['area'] in self.st.pickups: self.st.pickups[c['area']].append(dict(x=c['at'][0], y=c['at'][1], id=21, flag=CHEST + i, list='pk_side%d' % i, side=say(None, c['text']) + ['do call 147 %d' % c['gear']]))
 
     def lists(self):
         ids = self.st.ids; o = ['list side_board', 'set_flag 895', 'if_flag %d b_open' % OPEN, 'set_flag %d' % OPEN]
@@ -72,10 +72,10 @@ class Side:
         for i, b in enumerate(BOUNTIES):
             o += ['if_flag %d sc%d' % (PAID + i, i), 'unless_flag %d sc%d' % (KILLED + i, i), 'set_flag %d' % (PAID + i)]
             for t in b['paid']: o += say(None, t)
-            o += ['do call 194 %d' % b['exp']] + (['do call 143 %d' % b['gear']] if 'gear' in b else []) + ['label sc%d' % i]
+            o += ['do call 194 %d' % b['exp']] + (['do call 147 %d' % b['gear']] if 'gear' in b else []) + ['label sc%d' % i]
         o += ['if_flag %d sc_s' % STEVE_PAID, 'unless_flag %d sc_s' % STEVE_DEAD, 'set_flag %d' % STEVE_PAID]
         for t in STEVE['paid']: o += say(None, t)
-        o += ['do call 194 3000', 'do call 143 %d' % STEVE['gear'], 'label sc_s', 'stop']
+        o += ['do call 194 3000', 'do call 147 %d' % STEVE['gear'], 'label sc_s', 'stop']
         for i, s in enumerate(SPIRITS):
             o += ['list side_spirit%d' % i, 'set_flag 895', 'if_flag %d sp%d' % (S_START + i, i)]
             for t in s['hi']: o += say('Lost Spirit', t)
