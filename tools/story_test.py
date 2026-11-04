@@ -12,7 +12,7 @@ names = [l.split()[1] for l in open(L + '/assets/areas/SPRITES.txt')]; Q = json.
 AREAS = {n: json.load(open('%s/assets/areas/area%02d.json' % (L, n))) for n in IDS}
 sys.path[:0] = [os.path.join(ROOT, 'tools'), os.path.join(ROOT, 'vendor', 'gero-tools', 'tools')]
 import map_convert as C  # noqa: E402
-WALK = {n: C.Area(L, n).L['walkable'] > 0 for n in IDS}
+WALK = {n: C.Area(L, n).L['walkable'] > 0 for n in IDS}; FLY = {n: C.Area(L, n).L['flyable'] > 0 for n in IDS}
 
 
 def run(l):
@@ -90,8 +90,22 @@ def travel(to):
                     for k, dx, dy in DIRS:
                         place(sx, sy); walk(k, 20); step(['80'])
                         if area() == v: ok = True; break
+        if not ok: ok = fly_into(n, seen[v][1], lambda: area() == v)
         if not ok: print('  door failed', n, '->', v, seen[v][1]); return False
         step(['90'])                                                    # no free(): walking up here would go back through the door
+
+
+def fly_into(n, rect, done):
+    """Zones only flight reaches, like the top of area 3: take off (R), then cross into the zone from each clear side."""
+    x0, y0, x1, y1 = [max(0, v) for v in rect]; F = FLY[n]
+    run(['dump _s 0203ff05 1'])
+    if not rd('_s')[0]: step(['4 R', '20'])
+    for k, dx, dy in DIRS:
+        sx, sy = (x0 + x1) // 2 - 8 + dx * ((x1 - x0) // 2 + 20), (y0 + y1) // 2 - 4 + dy * ((y1 - y0) // 2 + 20)
+        if sy < 0 or sx < 0 or (sy >> 3) + 1 >= F.shape[0] or (sx >> 3) + 2 >= F.shape[1] or not F[sy >> 3:(sy >> 3) + 2, sx >> 3:(sx >> 3) + 3].all(): continue
+        place(sx, sy); walk(k, 40); step(['90'])
+        if done(): return True
+    return False
 
 
 def touch(n, x, y, want, keys=None):
@@ -182,20 +196,27 @@ def do_task(t):
             sx, sy = (x0 + x1) // 2 - 8 + dx * ((x1 - x0) // 2 + 20), (y0 + y1) // 2 - 4 + dy * ((y1 - y0) // 2 + 20)
             if fits(n, sx, sy): place(sx, sy); walk(k2, 40); step(['60'])
             if flag(f): return True
-        place((x0 + x1) // 2 - 8, (y0 + y1) // 2 - 4); walk('LEFT', 8); walk('RIGHT', 8); step(['60']); return bool(flag(f))
+        if flag(f): return True
+        return fly_into(n, (x0, y0, x1, y1), lambda: flag(f))
     if k == 'obstacle': return touch(n, t['x1'], t['y1'], f)
     print('  task type not driven', k); return False
 
 
 for q in range(first): setf(QF + q)
-print('start area', area(), pos()); bad = []
-for x in Q[first:last + 1]:
-    n = x['quest']; res = []
-    for t in x['tasks']:
-        ok = do_task(t); free(30); res.append((t['type'], ok, t.get('id')))
-        if not ok: print('  FAILED', t['type'], {k: v for k, v in t.items() if k not in ('label', 'raw', 'type')})
-    free(30); done = flag(QF + n)
-    print('quest', n, x.get('name'), 'done' if done else 'NOT DONE', [r[1] for r in res], 'area', area(), pos(), flush=True)
-    if not done: bad.append(n)
+print('start area', area(), pos())
+todo = Q[first:last + 1]
+for attempt in range(3):                                                # numeric order isn't always story order, so later passes retry what was blocked
+    bad = []
+    for x in todo:
+        n = x['quest']; res = []
+        if flag(QF + n): continue
+        for t in x['tasks']:
+            ok = do_task(t); free(30); res.append((t['type'], ok, t.get('id')))
+            if not ok: print('  FAILED', t['type'], {k: v for k, v in t.items() if k not in ('label', 'raw', 'type')})
+        free(30); done = flag(QF + n)
+        print('pass', attempt, 'quest', n, x.get('name'), 'done' if done else 'NOT DONE', [r[1] for r in res], 'area', area(), pos(), flush=True)
+        if not done: bad.append(x)
+    todo = bad
+    if not todo: break
+bad = [x['quest'] for x in todo]
 print('not done:', bad)
-if last >= 10 and first <= 8: place(200, 455); walk('UP', 70); print('crossed the bridge:', pos(), area())
