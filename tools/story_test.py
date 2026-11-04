@@ -96,6 +96,9 @@ def travel(to):
                 if fits(n, sx, sy): break
             else: continue
             place(sx, sy); walk(k, 40); step(['80'])
+            for i in range(3):                                          # a zone's dialogue can stop the walk short
+                if area() == v: break
+                step(['2 A', '40']); walk(k, 30); step(['80'])
             if area() == v: ok = True; break
         if not ok:                                                      # a door set into a wall: stand inside the zone and press towards it
             for sy in range(y0, y1, 8):

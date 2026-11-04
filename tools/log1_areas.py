@@ -68,7 +68,7 @@ def build(r, log1, ids, story, named, actors):
         a = get(n); m, st = C.convert(r, a, 'recolour', []); an, dur = C.anim_tiles(r, a); C.reduce_tiles(r, m, 860, [b for b, _ in an])
         P = m.write(r, C.TEMPLATE); C.add_anim(r, P, an, dur); exits = []
         for t in a.info['triggers']:
-            if t['kind'] == 'warp' and t['to_area'] in idset and t['mode'] & 1 and t['to_area'] != n:
+            if t['kind'] == 'warp' and t['to_area'] in idset and t['mode'] & 1 and t['to_area'] != n and not (n >= 42 and t['to_area'] >= 42):
                 name = door_dir(a, t['rect']); key = D[name]; dest = key | (WORLD << 8) | ((t['to_area'] + 1) << 16) | (1 << 24)
                 land = arrival(get(t['to_area']), t['to_x'], t['to_y'], name); assert land, 'no clear arrival in area %d' % t['to_area']; moved.append((n, t['to_area'], land[2]))
                 x0, y0, x1, y1 = [max(0, v) for v in t['rect']]; exits.append(struct.pack('<II', 0, put(struct.pack('<IIHHHHII', 0x08007675, 0x0800776D, x0, y0, x1, y1, dest, (land[1] << 16) | land[0]))))

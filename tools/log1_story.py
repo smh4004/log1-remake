@@ -308,7 +308,7 @@ class Story:
                 elif t['kind'] == 'hp_zone':
                     if t['hp'] < 0: self.zones.append((n, rect, -t['hp'], t['mode'])); continue
                     self.out += ['list ' + name, 'set_flag %d' % NOOP, 'do heal', 'stop']
-                elif t['kind'] == 'warp' and t['to_area'] in self.areas and (t['to_area'] == n or not t['mode'] & 1):
+                elif t['kind'] == 'warp' and t['to_area'] in self.areas and (t['to_area'] == n or not t['mode'] & 1 or (n >= 42 and t['to_area'] >= 42)):   # warp squares work from any side
                     self.out += ['list ' + name, 'set_flag %d' % NOOP] + self.warp(t['to_area'], t['to_x'], t['to_y']) + ['stop']
                 else: continue
                 self.doors[n].append(dict(kind='walk', rect=rect, list=name))
