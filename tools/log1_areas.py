@@ -100,6 +100,10 @@ def build(r, log1, ids, story, named, actors):
                     spawns.append((flag, n, put(struct.pack('<8I', 0x0800FD55, 0, row, (s['y'] << 16) | s['x'], actors.actor(nm, True), 0x080555A0, 1, 0x080716EC)), remove, story.beaten_flag(n, sprite_id)))
                 boss(sid, story.hostile[(n, sid)], idx); cur = sid
                 while (n, cur) in story.forms: f_, nxt = story.forms[(n, cur)]; boss(nxt, f_, 0); cur = nxt      # the next form takes over
+        import worldmap_cond
+        foe_i = story.side.install(n, a, fits, r, actors, put, named, spawns, foes_out, follows, walkins, foe_i, BF_IDX, worldmap_cond.cond_code)
+        if n == 17:                                          # Officer Pudding stands in the City from the start
+            offs.append(len(recs)); recs += bytes(r[story.side.board_rec - 8 - BB:story.side.board_rec - 8 - BB + 36])
         # story characters: waiting until they join the player, then at the escort's end with their after-talk
         for x in story.q:
             for t in x['tasks']:
