@@ -26,7 +26,7 @@ class Actors:
         for i in range(n):
             a = struct.unpack_from('<I', R, 0x54 + 4 * i)[0]
             if a >> 24 != 8: continue
-            want = struct.unpack_from('<I', self.r, a - BB)[0]; A = S.anim(self.ins, self.log1, rec, plan.get(i, [3, 4]), cmap, want=want) or S.anim(self.ins, self.log1, rec, [0, 1, 2, 3, 4, 5, 17], cmap, want=want)
+            want = struct.unpack_from('<I', self.r, a - BB)[0]; A = S.anim(self.ins, self.log1, rec, plan.get(i, [3, 4]), cmap, want=want) or S.anim(self.ins, self.log1, rec, [0, 1, 2, 3, 4, 5, 17], cmap, want=want) or S.anim(self.ins, self.log1, rec, plan.get(i, [3, 4]), cmap, want=want, fit=True) or S.anim(self.ins, self.log1, rec, [0, 1, 2, 3, 4, 5, 17], cmap, want=want, fit=True)
             if A: struct.pack_into('<I', R, 0x54 + 4 * i, A); ok += 1
         if not ok: self.missing.append(sprite)
         self.ids[key] = len(self.table) + 9; self.table.append(self.ins.put(bytes(R)))

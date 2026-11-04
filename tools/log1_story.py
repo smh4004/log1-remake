@@ -4,7 +4,7 @@ Flags: quest n = 420 + n, task t = 500 + t, conversation state from 620. A set's
 Defaults on the review list: no visible followers on escorts, LoG1 pickups mapped to Buu's Fury items (log1_pickups), cutscenes play only
 their conversations, and music changes are skipped until the music plan (M8).
 """
-import collections, json, os, sys
+import collections, json, os, struct, sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__))); sys.path.insert(0, os.path.join(ROOT, 'tools'))
 from convert_log1 import chain, conversations, split_line  # noqa: E402
 import log1_pickups as P  # noqa: E402
@@ -48,7 +48,8 @@ class Story:
             for k, p in enumerate(json.load(open('%s/assets/areas/area%02d.json' % (log1, n)))['pickups']): self.pickups[n].append(dict(p, flag=f, list='pk%d_%d' % (n, k))); f += 1
         assert f <= EV, 'pickup flags overflow'
         self.areas = {n: json.load(open('%s/assets/areas/area%02d.json' % (log1, n))) for n in ids}; self.labels = dict(l.rstrip('\n').split('\t', 1) for l in open(log1 + '/assets/text/strings.txt', encoding='latin1') if '\t' in l)
-        self.forms = {}; self.zones = []
+        self.forms = {}; self.zones = []; self.move_names = set()
+        self.hostile_all = {(a['area'], a['sprite']) for x in self.q for a in x['actions'] if a['type'] == 'make_hostile'}
         for n, a in self.areas.items(): self.area_sets |= {t['arg'] for t in a['triggers'] if t['kind'] == 'event'}
 
     def _states(self):
@@ -114,17 +115,32 @@ class Story:
 
     def warp(self, area, x, y): return ['do call 120 20; call 119 %d %d 1 %d %d; call 121 20' % (WORLD, area + 1, x, y)]
 
-    def scene(self, i):
-        """Cutscenes keep their conversations for now. Other commands (walks, animation, effects) are counted, not played."""
+    def movable(self, area, sprite):
+        """A character a scene can walk: always in this area and never hostile there. The player is left out for now."""
+        name = self.names[sprite] if sprite < len(self.names) else None
+        if not name or name == 'goku' or area not in self.areas or (area, sprite) in self.hostile_all: return None
+        return next((a for a in self.areas[area]['actors'] if a['kind'] != 2 and a['sprite'] == name and a['show'] == 0), None)
+
+    def scene(self, i, area=None):
+        """Plays a cutscene's conversations and its walks between characters on the map. Other commands (animation, effects, sound, camera) are counted, not played."""
         r = []
         for c in self.scenes[i]['commands']:
-            if c['fn'] == '0800CC61':
-                b = bytes.fromhex(c['raw']); r += self.say(chain(self.sets[b[0]], b[1])[0])
-            else: self.log['scene command skipped'] += 1
+            b = bytes.fromhex(c['raw']); f = c['fn']
+            if f == '0800CC61': r += self.say(chain(self.sets[b[0]], b[1])[0]); continue
+            if f == '0800CB25' or f == '0800D9C5':
+                a = self.movable(area, b[0])
+                if f == '0800CB25': x, y = struct.unpack_from('<HH', b, 4)
+                else:
+                    o = self.movable(area, b[2])
+                    if not o: a = None
+                    else: x, y = o['x'] + struct.unpack_from('<h', b, 4)[0], o['y'] + struct.unpack_from('<h', b, 6)[0]
+                if a:
+                    nm = self.names[b[0]]; self.move_names.add(nm); r.append('do call 56; call 96 %s %d %d; call 58' % (nm, x, y)); continue
+            self.log['scene command skipped'] += 1
         return r
 
     def actions(self, x):
-        r = []
+        r = []; area = next((t['area'] for t in x['tasks'] if t.get('area', 255) != 255), None); zones = {(a['x1'], a['y1'], a['x2'], a['y2']): a['scene'] for a in x['actions'] if a['type'] == 'add_scene_zone'}
         for a in x['actions']:
             k = a['type']
             if k == 'give_exp': r.append('do call 194 %d' % a['amount'])
@@ -135,13 +151,14 @@ class Story:
                 if t: r.append('narrate ' + t.replace('{', '(').replace('}', ')'))
             elif k == 'conversation': r += self.say(chain(self.sets[a['set']], a['entry'])[0])
             elif k == 'set_entry': r += self.set_state(a['set'], a['entry'])
-            elif k == 'scene': r += self.scene(a['index'])
-            elif k == 'warp': r += self.warp(a['area'], a['x'], a['y'])
+            elif k == 'scene': r += self.scene(a['index'], area)
+            elif k == 'warp': r += self.warp(a['area'], a['x'], a['y']); area = a['area']
+            elif k == 'add_scene_zone': pass                     # played by the warp zone with the same rectangle
             elif k == 'make_hostile': f = QF + x['quest']; self.hostile[(a['area'], a['sprite'])] = f
             elif k == 'set_walkable': self.walks.append((QF + x['quest'], a['area'], a['x1'] // 8, a['y1'] // 8, (a['x2'] + 7) // 8, (a['y2'] + 7) // 8))
             elif k == 'add_warp':
                 name = 'warp_q%d' % x['quest']; self.doors[a['area']].append(dict(kind='walk', rect=(a['x1'], a['y1'], a['x2'], a['y2']), list=name))
-                self.out += ['list ' + name, 'set_flag %d' % NOOP, 'unless_flag %d w%d_end' % (QF + x['quest'], x['quest'])] + self.warp(a['to_area'], a['to_x'], a['to_y']) + ['label w%d_end' % x['quest'], 'stop']
+                self.out += ['list ' + name, 'set_flag %d' % NOOP, 'unless_flag %d w%d_end' % (QF + x['quest'], x['quest'])] + (self.scene(zones[(a['x1'], a['y1'], a['x2'], a['y2'])], a['area']) if (a['x1'], a['y1'], a['x2'], a['y2']) in zones else []) + self.warp(a['to_area'], a['to_x'], a['to_y']) + ['label w%d_end' % x['quest'], 'stop']
             elif k == 'change_actor':
                 if self.names[a['sprite']] == 'goku': self.log['player sprite change skipped'] += 1
                 else: self.forms[(a['area'], a['sprite'])] = (QF + x['quest'], a['param'])

@@ -32,7 +32,7 @@ def colour_map(d, rec, bf):
     return m
 
 
-def cell(d, rec, row, col, cmap):
+def cell(d, rec, row, col, cmap, fit=False):
     """One frame on a 32x32 canvas with LoG1's origin at the bottom centre, or None."""
     p = u32(d, (u32(d, rec + 0x28) & MASK) + 4 * (row * 4 + col))
     if not p: return None
@@ -43,16 +43,20 @@ def cell(d, rec, row, col, cmap):
     for k in range(tw * th):
         img[(k // tw) * 8:(k // tw) * 8 + 8, (k % tw) * 8:(k % tw) * 8 + 8] = px[k * 64:k * 64 + 64].reshape(8, 8)
     out = np.zeros((32, 32), np.uint8); X, Y = x + 8, y + 24
-    if not (0 <= X and X + w <= 32 and 0 <= Y and Y + h <= 32): return None
+    if not (0 <= X and X + w <= 32 and 0 <= Y and Y + h <= 32):
+        if not fit: return None
+        f = max(w, h) / 32 if max(w, h) > 32 else 1                    # big creatures shrink to BF's 32x32 limit for character frames
+        nw, nh = max(1, int(w / f)), max(1, int(h / f)); ys = (np.arange(nh) * h // nh); xs = (np.arange(nw) * w // nw)
+        out[32 - nh:32, (32 - nw) // 2:(32 - nw) // 2 + nw] = cmap[img[ys][:, xs]]; return out
     out[Y:Y + h, X:X + w] = cmap[img]
     return out
 
 
-def anim(ins, d, rec, rows, cmap, want=0):
-    rows = [r for r in rows if cell(d, rec, r, 0, cmap) is not None and cell(d, rec, r, 1, cmap) is not None and cell(d, rec, r, 2, cmap) is not None]
+def anim(ins, d, rec, rows, cmap, want=0, fit=False):
+    rows = [r for r in rows if all(cell(d, rec, r, c, cmap, fit) is not None for c in (0, 1, 2))]
     if not rows: return 0
     if want and len(rows) < want: rows = [rows[i * len(rows) // want] for i in range(want)]
-    return ins.anim([[cell(d, rec, r, c, cmap) for r in rows] for c in (0, 1, 2)])
+    return ins.anim([[cell(d, rec, r, c, cmap, fit) for r in rows] for c in (0, 1, 2)])
 
 
 def check_all(log1, bf):

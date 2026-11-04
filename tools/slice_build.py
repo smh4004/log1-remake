@@ -26,8 +26,9 @@ def main():
     if not os.path.exists(os.path.join(O, 'text', 'ui.txt')): text_tool.export(bf, os.path.join(O, 'text'))
     r = bytearray(text_tool.build(bf, os.path.join(O, 'text'), extra=scenes.texts(sc))); r += b'\xff' * max(0, 0x1000000 - len(r))
     assert log1_portraits.install(r, combo, plan)[0] == ptr
-    end = len(r); r += bytes(0x100000); fin = scenes.compile_all(r, sc, text_tool.EXTRA_REFS, scenes.aliases(''), end); del r[(fin + 3) & ~3:]
     act = log1_actors.Actors(r, log1, L, 0xC00000)
+    idx = {n: (log1_areas.BF_IDX.get(n) or act.actor(n, False)) - 9 for n in st.move_names}   # scene walks name their actors
+    end = len(r); r += bytes(0x100000); fin = scenes.compile_all(r, sc, text_tool.EXTRA_REFS, scenes.aliases(''), end, idx); del r[(fin + 3) & ~3:]
     tab, spawns, walks, picks, foes, zones, skipped, moved = log1_areas.build(r, L, IDS, st, dict(scenes.NAMED), act); new, cur = act.finish()
     print('actors added', new, 'without frames', act.missing, 'end', hex(cur)); print('arrival moves', [m for m in moved if m[2]]); print('skipped', collections.Counter(s[2] for s in skipped))
     print('hook', build_flight.install(r, spawns, walks, picks, foes, zones), 'spawns', len(spawns), 'walks', len(walks), 'pickups', len(picks), 'enemies', len(foes), 'hurt zones', len(zones))
