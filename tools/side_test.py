@@ -15,13 +15,18 @@ def foes():
     run(['dump _e 03001bb0 84']); b = rd('_e'); c = struct.unpack_from('<I', b)[0]; return struct.unpack_from('<%dI' % c, b, 4)
 def at(o): run(['dump _x %08x 8' % (o + 0x1A0)]); return [v >> 8 for v in struct.unpack('<2i', rd('_x'))]
 def kill(n, x, y, f):
+    idle = 0
     for i in range(900):                                                # placeholder HP is high for a fresh Goku, about 9 damage a hit
         if flag(f): return True
         if i % 8 == 7 and foes():
             ex, ey = at(min(foes(), key=lambda e: abs(at(e)[0] - x) + abs(at(e)[1] - y))); place(*near(n, ex - 14, ey))
         elif i == 0: place(*near(n, x - 30, y)); step(['20'])
         L_ = foes()
-        if not L_: step(['20']); continue
+        if not L_:
+            step(['20']); idle += 1
+            if idle > 40: print('  no enemy here'); return False
+            continue
+        idle = 0
         o = min(L_, key=lambda e: abs(at(e)[0] - x) + abs(at(e)[1] - y)); e = at(o); p = pos(); dx, dy = e[0] - p[0], e[1] - p[1]; k = ('RIGHT' if dx > 0 else 'LEFT') if abs(dx) >= abs(dy) else ('DOWN' if dy > 0 else 'UP')
         step(['%d %s' % (min(20, max(4, (abs(dx) + abs(dy)) // 2)), k)] if abs(dx) + abs(dy) > 26 else ['4 ' + k, '4 A', '10', '4 A', '10', '4 A', '14'])
     return False
