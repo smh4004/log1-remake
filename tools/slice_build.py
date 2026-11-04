@@ -5,7 +5,7 @@
 import collections, json, os, struct, subprocess, sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path[:0] = [os.path.join(ROOT, 'tools'), os.path.join(ROOT, 'vendor', 'gero-tools', 'tools')]
-import log1_music, log1_split, build_flight, log1_actors, log1_areas, log1_portraits, log1_story, log1_world, scenes, text_tool  # noqa: E402
+import log1_balance, log1_music, log1_split, build_flight, log1_actors, log1_areas, log1_portraits, log1_story, log1_world, scenes, text_tool  # noqa: E402
 
 
 IDS = [int(v) for v in os.environ['IDS'].split(',')] if os.environ.get('IDS') else log1_split.ids(); LAST_QUEST = int(os.environ.get('LAST_QUEST', 74))
@@ -18,7 +18,7 @@ def main():
     base = bytearray(open(bf, 'rb').read()); plan = log1_portraits.plan(L, os.path.join(DEPS, 'buusfury-decomp'), os.path.join(DEPS, 'log2-decomp'), base)
     combo = open(os.path.join(ROOT, 'rom', 'log12.gba'), 'rb').read(); log1 = open(os.path.join(ROOT, 'rom', 'log1.gba'), 'rb').read()
     tmp = bytearray(base); tmp += b'\xff' * (0x1000000 - len(tmp)); ptr, nadd = log1_portraits.install(tmp, combo, plan); print('portraits added', nadd)
-    st = log1_story.Story(L, LAST_QUEST, IDS, ptr, conv); path = os.path.join(O, 'story.scene'); print(st.generate(path))
+    bal = log1_balance.Balance(os.path.join(DEPS, 'buusfury-decomp')); st = log1_story.Story(L, LAST_QUEST, IDS, ptr, conv, bal); path = os.path.join(O, 'story.scene'); print(st.generate(path))
     op = os.path.join(ROOT, 'src', 'scenes', 'opening.scene')
     if os.environ.get('START'):                          # test builds: START=area,x,y begins somewhere else
         an, x, y = os.environ['START'].split(','); op2 = os.path.join(O, 'opening_test.scene'); open(op2, 'w').write(open(op).read().replace('call 119 26 1 1 184 72', 'call 119 26 %d 1 %s %s' % (int(an) + 1, x, y))); op = op2
@@ -28,6 +28,7 @@ def main():
     r = bytearray(text_tool.build(bf, os.path.join(O, 'text'), extra=scenes.texts(sc))); r += b'\xff' * max(0, 0x1000000 - len(r))
     assert log1_portraits.install(r, combo, plan)[0] == ptr
     act = log1_actors.Actors(r, log1, L, 0xC00000)
+    act.bal = bal; s_ = log1_balance.START; struct.pack_into('<HHHBBBB', r, 0x6FDA4C, s_['level'], s_['hp'], s_['ep'], s_['str'], s_['pow'], s_['end'], s_['spd'])
     idx = {n: (log1_areas.BF_IDX.get(n) or act.actor(n, False)) - 9 for n in st.move_names}   # scene walks name their actors
     end = len(r); r += bytes(0x100000); fin = scenes.compile_all(r, sc, text_tool.EXTRA_REFS, scenes.aliases(''), end, idx); del r[(fin + 3) & ~3:]
     tab, spawns, walks, picks, foes, zones, skipped, moved, qc, follows, walkins = log1_areas.build(r, L, IDS, st, dict(scenes.NAMED), act); new, cur = act.finish()

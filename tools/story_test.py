@@ -22,7 +22,7 @@ WALK = {n: C.Area(L, n).L['walkable'] > 0 for n in IDS}; FLY = {n: C.Area(L, n).
 def run(l):
     p = os.path.join(D, '_q.txt'); open(p, 'w').write('\n'.join(['load ' + cur[0]] + l) + '\n'); subprocess.run([H, rom, p, D], capture_output=True)
 def rd(n): return open(os.path.join(D, n + '.bin'), 'rb').read()
-HP = ['w8 %08x %02x' % (0x03001574 + i, b) for i, b in enumerate(struct.pack('<I', 30000 << 16))]
+HP = ['w8 %08x %02x' % (0x03001574 + i, b) for i, b in enumerate(struct.pack('<I', 30000 << 16))] if not os.environ.get('NO_TOPUP') else []                # NO_TOPUP=1: a difficulty run, where Goku can die
 def step(l): run(HP + l + ['save _n']); cur[0] = '_n'
 def flag(f): run(['dump _f %08x 1' % (BASE + (f >> 3))]); return rd('_f')[0] >> (f & 7) & 1
 def setf(f): run(['dump _f %08x 1' % (BASE + (f >> 3))]); step(['w8 %08x %02x' % (BASE + (f >> 3), rd('_f')[0] | 1 << (f & 7))])

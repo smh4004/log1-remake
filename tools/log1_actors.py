@@ -45,11 +45,12 @@ class Actors:
         self.ids[key] = len(self.table) + 9; self.table.append(self.ins.put(bytes(R)))
         return self.ids[key]
 
-    def row(self, sprite, death=0, no_exp=False, hp_set=None):
-        if (sprite, death) in self.rows: return self.rows[(sprite, death)]
-        e = self.csv[self.row_map[self.names.index(sprite)]]; R = bytearray(self.r[ST + 8 * 28:ST + 9 * 28]); hp = int(e['hp']); exp = 0 if no_exp else int(e['exp'])
-        struct.pack_into('<I', R, 0, exp); struct.pack_into('<I', R, 4, hp_set or max(20, min(1500, hp // 10 if hp > 400 else hp * 4))); struct.pack_into('<I', R, 0x18, death)
-        k = self.next_row; self.next_row += 1; assert k < 150; self.r[ST + k * 28:ST + (k + 1) * 28] = R; self.rows[(sprite, death)] = k; return k
+    def row(self, sprite, death=0, no_exp=False, hp_set=None, area=0, boss=False, extra=0):
+        key = (sprite, death, area, boss, extra, no_exp)
+        if key in self.rows: return self.rows[key]
+        R = bytearray(self.r[ST + 8 * 28:ST + 9 * 28]); lv, hp, exp, a, p, e = self.bal.enemy(area, boss, extra)
+        struct.pack_into('<II', R, 0, 0 if no_exp else exp, hp_set or hp); R[0xC:0x10] = bytes((min(lv, 255), a, p, e)); struct.pack_into('<I', R, 0x18, death)
+        k = self.next_row; self.next_row += 1; assert k < 150, 'enemy rows'; self.r[ST + k * 28:ST + (k + 1) * 28] = R; self.rows[key] = k; return k
 
     def finish(self):
         self.r[self.at:self.at + 4 * len(self.table)] = struct.pack('<%dI' % len(self.table), *self.table)

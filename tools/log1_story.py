@@ -35,7 +35,8 @@ _with_energy()
 class Story:
     QF, TF = QF, TF
 
-    def __init__(self, log1, last_quest, ids, portraits, scenes_json):
+    def __init__(self, log1, last_quest, ids, portraits, scenes_json, balance=None):
+        self.bal = balance
         self.sets = conversations(log1); self.names = [l.split()[1] for l in open(log1 + '/assets/areas/SPRITES.txt')]
         d = json.load(open(log1 + '/assets/story/quests.json')); self.q = [x for x in d['quests'] if x['quest'] <= last_quest]; self.qof = d['quest_of_flag']
         self.ids, self.por = set(ids), portraits or {}; self.scenes = {s['scene']: s for s in json.load(open(scenes_json))}
@@ -163,7 +164,7 @@ class Story:
         r = []; area = next((t['area'] for t in x['tasks'] if t.get('area', 255) != 255), None); zones = {(a['x1'], a['y1'], a['x2'], a['y2']): a['scene'] for a in x['actions'] if a['type'] == 'add_scene_zone'}
         for a in x['actions']:
             k = a['type']
-            if k == 'give_exp': r.append('do call 194 %d' % a['amount'])
+            if k == 'give_exp': r.append('do call 194 %d' % self.bal.quest_exp(area if area is not None else 0, any(t['type'] in ('activate', 'defeat') for t in x['tasks'])))
             elif k == 'give_pickup':
                 if a['item'] in P.BF_ITEM: r.append('do call 128 %d' % P.BF_ITEM[a['item']])
                 else: self.log['pickup with no Buu\'s Fury item: %d' % a['item']] += 1
