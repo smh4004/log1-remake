@@ -222,7 +222,7 @@ static void live_world(u32 k, int fresh) {
 __attribute__((section(".text.table"))) volatile const u32 art_ptr = 0, mark_ptr = 0;
 typedef struct { u16 flag; u8 x, y; } mark_t;
 #define OAM ((volatile u16 *)0x03003498)
-#define MARK_TILE 1000                      /* the map streams billboards up to tile 835 */
+#define MARK_TILE 100                       /* the map allocates OBJ tiles down from the top of VRAM, so low tiles stay free */
 #define MARK_FIRST 118
 void flight_draw(int list) {
     int map = AREA && *(u8 *)AREA == 0 && *(u8 *)(AREA + 1) == 50;
