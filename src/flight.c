@@ -218,12 +218,11 @@ static void live_world(u32 k, int fresh) {
 }
 
 /* The draw pass (sub_0801157E) rebuilt here so the world map's HUD can add to it: copy the OAM shadow to OAM, then draw each listed object's VRAM.
- * On the map, Namek's frame replaces the Lookout's in VRAM and each visited place gets a marker on the minimap. */
+ * On the map, each visited place gets a marker on the minimap. */
 __attribute__((section(".text.table"))) volatile const u32 art_ptr = 0, mark_ptr = 0;
 typedef struct { u16 flag; u8 x, y; } mark_t;
 #define OAM ((volatile u16 *)0x03003498)
-#define LOOKOUT_TILE 662
-#define MARK_TILE 440
+#define MARK_TILE 1000                      /* the map streams billboards up to tile 835 */
 #define MARK_FIRST 118
 void flight_draw(int list) {
     int map = AREA && *(u8 *)AREA == 0 && *(u8 *)(AREA + 1) == 50;
@@ -239,10 +238,8 @@ void flight_draw(int list) {
     while (n > 0) { int *o = (int *)p[n]; n--; int v = *o; ((void (*)(void *))(v + *(int *)(v + 0x14)))(o); }
     *p = 0;
     if (!map) return;
-    const u32 *a = (const u32 *)art_ptr; volatile u32 *d = (volatile u32 *)(0x06010000 + LOOKOUT_TILE * 32);
-    for (int i = 0; i < 256; i++) d[i] = a[i];
-    d = (volatile u32 *)(0x06010000 + MARK_TILE * 32);
-    for (int i = 0; i < 16; i++) d[i] = a[256 + i];
+    const u32 *a = (const u32 *)art_ptr; volatile u32 *d = (volatile u32 *)(0x06010000 + MARK_TILE * 32);
+    for (int i = 0; i < 16; i++) d[i] = a[i];
 }
 
 void flight_keys(u8 *st) {

@@ -1,7 +1,7 @@
 """World map flying on Earth: Buu's Fury's Mode 7 map (0:50) with LoG1's Earth areas as landing spots.
 
 While flying in an Earth area, L takes off to the map. Places open once visited (flag VISIT + area), so flying never skips the story.
-The map's floating Lookout is reskinned as Namek: hold B under it to go there once you've been. Other World stays on foot. Uses Gero's worldmap.py, with landing scripts that do nothing for a place not yet visited.
+Namek is a new floating billboard on the map, using Buu's Fury's unused airship slot for its name and landing: hold B under it to go there once you've been. Other World stays on foot. Uses Gero's worldmap.py, with landing scripts that do nothing for a place not yet visited.
 """
 import json, os, struct, sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -22,9 +22,12 @@ _areas.entry_any = _entry_any; sys.modules.setdefault('areas', _areas)
 import scenes, worldmap  # noqa: E402
 
 VISIT, UI = 800, 1534
+NAMEK_AT = (3216, 420)                                              # open sea in the far north-east, away from every Buu's Fury place
+NAMEK_RECT = (NAMEK_AT[0] - 40, NAMEK_AT[1] - 40, NAMEK_AT[0] + 56, NAMEK_AT[1] + 56)
+MAP_RECORD = 0x2AD8BC                                                # 0:50's map: +0x24 billboard count, +0x28 records, +0x2C 8bpp graphic
 PLACES = [(0, 'roshi', "Roshi's Island"), (2, 'east_district', "Goku's House"), (4, 'fukurou', 'Forest'), (5, 'sw_forest', 'Village'), (9, 'nataday', 'Crash Site'),
-          (15, 'papaya', "Kami's Lookout"), (17, 'west_city', 'City'), (22, 'pilaf', 'Military Base'), (23, 'diablo', 'Battlegrounds'), (24, 'lookout', 'Namek')]
-RECTS = {'west_city': (1193, 1137, 1312, 1296), 'east_district': (2632, 1465, 2712, 1536), 'roshi': (2833, 1633, 2944, 1744), 'lookout': (593, 1025, 704, 1128), 'papaya': (1953, 2041, 2096, 2200), 'diablo': (1505, 985, 1648, 1144),
+          (15, 'lookout', "Kami's Lookout"), (17, 'west_city', 'City'), (22, 'pilaf', 'Military Base'), (23, 'diablo', 'Battlegrounds'), (24, 'airship', 'Namek')]
+RECTS = {'west_city': (1193, 1137, 1312, 1296), 'east_district': (2632, 1465, 2712, 1536), 'roshi': (2833, 1633, 2944, 1744), 'lookout': (593, 1025, 704, 1128), 'airship': NAMEK_RECT, 'diablo': (1505, 985, 1648, 1144),
          'pilaf': (2249, 1521, 2360, 1624), 'nataday': (2161, 857, 2232, 928), 'sw_forest': (825, 1761, 904, 1840), 'fukurou': (721, 809, 864, 944)}
 
 
@@ -63,7 +66,26 @@ def install(r, log1, ids, world, at=0xAE0000):
     pos = spots(log1, ids, None); cfg = dict(locations=[dict(key=bf, bf=bf, ui=UI + i, rect=RECTS[bf], dests=[dict(when='set:%d' % (VISIT + n), to=[world, n + 1, *pos[n]])]) for i, (n, bf, name) in enumerate(PLACES) if n in pos])
     path = os.path.join(ROOT, 'out', 'slice', 'world.json'); json.dump(cfg, open(path, 'w'))
     worldmap.landing_code = landing_code; e = _entry_any(r, 0, 50); r[e + 4] = 0              # Buu's Fury's map enemies would be out of place and far too strong
-    return worldmap.apply(r, path, at)
+    res = worldmap.apply(r, path, at)
+    add_namek(r, res[0], e)
+    return res
+
+
+def add_namek(r, at, e):
+    """A 95th billboard with Namek's frame added to the map's graphic, stored uncompressed, and the airship exits moved under it."""
+    from wfz import decompress_stream
+    B = 0x08000000; m = MAP_RECORD; n, recs, gfx = struct.unpack_from('<III', r, m + 0x24); t, s = struct.unpack_from('<II', r, gfx - B)
+    data = bytes(decompress_stream(r, gfx - B + 8, s)[0]) if t else bytes(r[gfx - B + 8:gfx - B + 8 + s]); tile = len(data) // 32
+    def put(b):
+        nonlocal at
+        a = at; r[a:a + len(b)] = b; at = (a + len(b) + 3) & ~3; assert at <= 0xAFFF00; return B + a
+    fr = namek_frame(); new = data + b''.join(fr[y:y + 8, x:x + 8].tobytes() for y in range(0, 32, 8) for x in range(0, 32, 8))
+    x, y = NAMEK_AT; rec = bytes(r[recs - B:recs - B + 24 * n]) + struct.pack('<4IHHI', x, y, x + 32, y + 32, 0x2000, 0x8000, (0x138 << 16) | tile)   # the same flags as the Lookout, which floats
+    struct.pack_into('<III', r, m + 0x24, n + 1, put(rec), put(struct.pack('<II', 0, len(new)) + new))
+    xp = struct.unpack_from('<I', r, e + 0x10)[0] - B; L, N = worldmap.BF_PLACES['airship']
+    for i in L + [N]:
+        struct.pack_into('<I', r, xp + 8 * i, 0); o = struct.unpack_from('<I', r, xp + 8 * i + 4)[0] - B; struct.pack_into('<4H', r, o + 8, *NAMEK_RECT)
+    for i in L: struct.pack_into('<I', r, struct.unpack_from('<I', r, xp + 8 * i + 4)[0] - B + 4, worldmap.ASCENDED)
 
 
 def takeoff_lists(ids):
@@ -97,13 +119,13 @@ def namek_frame():
 
 
 def art():
-    """Bytes for the hook: Namek's 1024-byte frame, then the 64-byte minimap marker tile."""
+    """The 64-byte minimap marker tile for the hook."""
     import numpy as np
-    fr = namek_frame(); f = b''.join(fr[y:y + 8, x:x + 8].tobytes() for y in range(0, 32, 8) for x in range(0, 32, 8)); m = np.zeros((8, 8), np.uint8)   # OBJ tiles, 8x8 at a time
+    m = np.zeros((8, 8), np.uint8)
     for y in range(8):
         for x in range(8):
             d = abs(x - 3.5) + abs(y - 3.5); m[y, x] = 249 if d < 2.2 else (77 if d < 3.3 else 0)
-    return f + m.tobytes()
+    return m.tobytes()
 
 
 def markers():
