@@ -140,3 +140,12 @@ Items are collected by walking over them (exit class 0x0800742D, getter 0x080077
 Bot run in the slice build: all three items found, including the one inside Kame House through the real door; all three delivered to Roshi; reward flag set; EXP rose by exactly 350 (2,200 to 2,550); the player could walk afterwards.
 The player is placed by RAM write beside each target. Placeholders: no item graphics, invented pickup text, and Senzu Beans standing in for LoG1's pickups. Not done: scene 0, the conditional warp to area 2, and `set_entry` changes for other characters.
 `setup.sh` is written but hasn't been run from a fresh machine.
+
+## Object limits and streaming (`src/flight.c`, 2026-11-03)
+Buu's Fury's object list at 0x03001C54 ends before another table at 0x03001CC8. In tests it held 27 area objects plus the player's two; extra enemies were created but never listed. The enemy list has 32 slots, directly before the player pointer at 0x03001C34, and the forest's 39 enemies hung the game.
+Enemies and pickups now spawn near the player and leave when far, so LoG1's counts stay exact. A forest tour peaked at 11 live enemies with the player's heap address unchanged. An enemy that leaves the list has died and stays dead for that visit, and one that leaves range returns to its spawn point at full HP.
+Pickups use LoG1's art, recoloured at build time, and restore the masks around the spawn so they don't block. Native 128 takes Buu's Fury's item index (11 = Senzu Bean); the old value 21 gave Dragon Ball 6.
+
+## Story route (`tools/story_test.py`, 2026-11-03)
+The bot drives quests through real doors, pickups, talks and bridge pieces, places the player by RAM write beside each target and keeps HP topped up. Walking routes and balance are not tested.
+Door keys: a zone at a map edge leaves over that edge, across its short side. Elsewhere the key points away from the open side. Area 29's warp squares need walk-in zones instead.

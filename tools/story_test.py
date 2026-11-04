@@ -135,7 +135,10 @@ def do_task(t):
     if k == 'after_quest' or flag(f): return True
     if not travel(t['area']): return False
     n = t['area']
-    if k == 'spawn_item': return touch(n, t['x'], t['y'], f)
+    if k == 'spawn_item':
+        for i in range(3):                                              # an enemy can knock the player off the way
+            if touch(n, t['x'], t['y'], f): return True
+        return False
     if k == 'place_item':
         place(t['x1'], t['y2'] + 20); walk('UP', 16); step(['30'])    # the gap before this one is open by now
         return bool(flag(f)) or touch(n, t['x1'], t['y1'], f)
