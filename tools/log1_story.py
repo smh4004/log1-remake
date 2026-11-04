@@ -313,7 +313,7 @@ class Story:
                     if not txt: self.log['message without text'] += 1; continue
                     self.out += ['list ' + name, 'set_flag %d' % NOOP] + ['narrate ' + p for p in split_line(txt.replace('{', '(').replace('}', ')').strip())] + ['stop']
                 elif t['kind'] == 'hp_zone':
-                    if t['hp'] < 0: self.zones.append((n, rect, -t['hp'], t['mode'])); continue
+                    if t['hp'] < 0: self.zones.append((n, rect, max(1, -t['hp'] // 10), t['mode'])); continue   # LoG1's numbers would take a third of early HP a second
                     self.out += ['list ' + name, 'set_flag %d' % NOOP, 'do heal', 'stop']
                 elif t['kind'] == 'warp' and t['to_area'] in self.areas and (t['to_area'] == n or not t['mode'] & 1 or (n >= 42 and t['to_area'] >= 42)):   # warp squares work from any side
                     self.out += ['list ' + name, 'set_flag %d' % NOOP] + self.warp(t['to_area'], t['to_x'], t['to_y']) + ['stop']

@@ -26,7 +26,7 @@ class Balance:
         L = STAGE[area] + extra + (2 if boss else 0); hp, ex = self.f_hp(L), self.f_exp(L); a, e = max(4, self.f_atk(L)), max(4, self.f_end(L))
         if L < 12: hp = 18 + 18 * L; ex *= (L / 12) ** 2           # Buu's Fury has no enemies this weak, so the curve is drawn in by hand
         ex *= 1 + L / 30
-        if boss: hp *= BOSS_HP; a *= BOSS_DMG; ex *= 6
+        if boss: hp *= min(BOSS_HP, 2.5 + L / 12); a *= (0.8 if L < 20 else BOSS_DMG); ex *= 6     # early bosses ease in; the first difficulty run died at every one up to Burter
         return int(L + 50), int(max(12, hp)), int(ex * KILL_EXP), int(a), int(a), int(e)
 
     def quest_exp(self, area, boss=False):
