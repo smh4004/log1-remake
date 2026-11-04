@@ -68,11 +68,10 @@ def build(r, log1, ids, story, named, actors):
         a = get(n); m, st = C.convert(r, a, 'recolour', []); an, dur = C.anim_tiles(r, a); C.reduce_tiles(r, m, 860, [b for b, _ in an])
         P = m.write(r, C.TEMPLATE); C.add_anim(r, P, an, dur); exits = []
         for t in a.info['triggers']:
-            if t['kind'] == 'warp' and t['to_area'] in idset and t['mode'] & 1:
+            if t['kind'] == 'warp' and t['to_area'] in idset and t['mode'] & 1 and t['to_area'] != n:
                 name = door_dir(a, t['rect']); key = D[name]; dest = key | (WORLD << 8) | ((t['to_area'] + 1) << 16) | (1 << 24)
                 land = arrival(get(t['to_area']), t['to_x'], t['to_y'], name); assert land, 'no clear arrival in area %d' % t['to_area']; moved.append((n, t['to_area'], land[2]))
                 x0, y0, x1, y1 = [max(0, v) for v in t['rect']]; exits.append(struct.pack('<II', 0, put(struct.pack('<IIHHHHII', 0x08007675, 0x0800776D, x0, y0, x1, y1, dest, (land[1] << 16) | land[0]))))
-            elif t['kind'] not in ('warp',): skipped.append((n, 'trigger', t['kind']))
         for d in story.doors.get(n, []):
             x0, y0, x1, y1 = [max(0, v) for v in d['rect']]; exits.append(struct.pack('<II', 0, put(struct.pack('<IIHHHHI', 0x0800742D, 0x080077DF, x0, y0, x1, y1, named[d['list']]))))
         recs = bytearray(); offs = []; enemy_objs = []
@@ -85,14 +84,17 @@ def build(r, log1, ids, story, named, actors):
             elif s['show'] == 2: cond = 0x10000 | (story.QF + flags[s['flag']])
             sid = story.names.index(s['sprite'])
             if s['kind'] == 2:
-                row = actors.row(s['sprite']); ch = actors.actor(s['sprite'], True)
+                d_ = story.death_script(n, sid, put); row = actors.row(s['sprite'], d_ or 0, story.boss_gives_exp(n, sid)); ch = actors.actor(s['sprite'], True)
                 foes_out.append((n, foe_i, s['x'], s['y'], put(struct.pack('<8I', 0x0800FD55, 0 if s['show'] == 0 else cond, row, (s['y'] << 16) | s['x'], ch, 0x080555A0, 1, 0x080716EC)))); foe_i += 1; assert foe_i <= 64; continue
             idx = BF_IDX.get(s['sprite']) or actors.actor(s['sprite'], False)
             talk = named.get('talk_set%02d' % s['param'], 0); offs.append(len(recs))
             recs += struct.pack('<9I', 0x0800A223, 0x32, 0x08017DA3, cond, (s['y'] << 16) | s['x'], talk, idx, 1, 0)
             if (n, sid) in story.hostile:
-                death = story.death_script(n, sid, put); ch = actors.actor(s['sprite'], True); row = actors.row(s['sprite'], death)
-                rec = put(struct.pack('<8I', 0x0800FD55, 0, row, (s['y'] << 16) | s['x'], ch, 0x080555A0, 1, 0x080716EC)); spawns.append((story.hostile[(n, sid)], n, rec, idx))
+                def boss(sprite_id, flag, remove):
+                    nm = story.names[sprite_id]; d_ = story.death_script(n, sprite_id, put); row = actors.row(nm, d_ or 0, story.boss_gives_exp(n, sprite_id))
+                    spawns.append((flag, n, put(struct.pack('<8I', 0x0800FD55, 0, row, (s['y'] << 16) | s['x'], actors.actor(nm, True), 0x080555A0, 1, 0x080716EC)), remove))
+                boss(sid, story.hostile[(n, sid)], idx); cur = sid
+                while (n, cur) in story.forms: f_, nxt = story.forms[(n, cur)]; boss(nxt, f_, 0); cur = nxt      # the next form takes over
         # story characters: waiting until they join the player, then at the escort's end with their after-talk
         for x in story.q:
             for t in x['tasks']:
@@ -118,8 +120,9 @@ def build(r, log1, ids, story, named, actors):
         e = bytearray(tmpl); e[0], e[1], e[2], e[3] = WORLD, n + 1, 1, len(exits); struct.pack_into('<I', e, 4, len(objs))
         struct.pack_into('<I', e, 0x10, put(b''.join(exits)) if exits else 0); struct.pack_into('<I', e, 0x14, put(b''.join(struct.pack('<I', o) for o in objs)) if objs else 0)
         struct.pack_into('<I', e, 0x2C, put(struct.pack('<I', P))); entries.append(bytes(e))
+    struct.pack_into('<I', r, 0x79B704 + 4 * story.RUN_EVENT, named['quest_check'])
     cnt = COUNT + len(entries); tab = put(bytes(r[AREAS:AREAS + 56 * COUNT]) + b''.join(entries))
     struct.pack_into('<I', r, TABLE_LIT, tab); a_ = min(0xFF, cnt // 2)
     struct.pack_into('<4H', r, COUNT_INSN, 0x2000 | a_, 0x0040, 0x3000 | (cnt - 2 * a_), 0x4770)
     ent = lambda n: tab + 56 * (COUNT + addr[n])
-    return tab, [(f, ent(n), rec, idx) for f, n, rec, idx in spawns], [(f, ent(n), x1, y1, x2, y2) for f, n, x1, y1, x2, y2 in story.walks if n in idset], [(ent(n), f, x, y, rec) for n, f, x, y, rec in picks], [(ent(n), f, x, y, rec) for n, f, x, y, rec in foes_out], skipped, moved
+    return tab, [(f, ent(n), rec, idx) for f, n, rec, idx in spawns], [(f, ent(n), x1, y1, x2, y2) for f, n, x1, y1, x2, y2 in story.walks if n in idset], [(ent(n), f, x, y, rec) for n, f, x, y, rec in picks], [(ent(n), f, x, y, rec) for n, f, x, y, rec in foes_out], [(ent(n), max(0, x0), max(0, y0), max(0, x1), max(0, y1), d, m) for n, (x0, y0, x1, y1), d, m in story.zones if n in idset], skipped, moved

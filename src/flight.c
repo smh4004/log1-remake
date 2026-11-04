@@ -112,6 +112,22 @@ static void live_foes(int new_area) {
     }
 }
 
+/* LoG1's hurting ground: table of {area, rect, damage per second, mode}, ending in area 0. Mode 1 zones spare a flying player. Never kills: HP stops at 1. */
+typedef struct { u32 area; short x1, y1, x2, y2; u16 dmg, mode; } hurt_t;
+__attribute__((section(".text.table"))) volatile const u32 zone_ptr = 0;
+#define HP (*(volatile int *)0x03001574)
+#define SECOND (*(volatile u8 *)0x0203FF71)
+
+static void live_hurt(void) {
+    if (!PLAYER || ++SECOND < 60) return;
+    SECOND = 0;
+    int px = *(int *)(PLAYER + 0x1A0) >> 8, py = *(int *)(PLAYER + 0x1A4) >> 8;
+    for (const hurt_t *z = (const hurt_t *)zone_ptr; z && z->area; z++) {
+        if (z->area != AREA || px < z->x1 || px >= z->x2 || py < z->y1 || py >= z->y2 || (z->mode == 1 && STATE[1])) continue;
+        int v = HP - ((int)z->dmg << 16); HP = v < (1 << 16) ? (1 << 16) : v; return;
+    }
+}
+
 static void live_walk(int new_area) {
     for (int i = 0; i < 16 && walk_table[i].flag; i++) {
         volatile const walk_t *w = &walk_table[i];
@@ -151,6 +167,7 @@ void flight_keys(u8 *st) {
     live_walk(fresh);
     live_pick(fresh);
     live_foes(fresh);
+    live_hurt();
     int r = (k & KEY_R) != 0, pressed = r && !STATE[0]; STATE[0] = r;
     if (!pressed || !PLAYER) return;
     if (STATE[1]) {

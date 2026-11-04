@@ -10,6 +10,7 @@ from convert_log1 import chain, conversations, split_line  # noqa: E402
 import log1_pickups as P  # noqa: E402
 
 QF, TF, EF, TOK, NOOP = 420, 500, 620, 870, 895
+RUN_EVENT, EV = 498, 356   # global event repurposed for quest_check; one-shot event flags
 PF = 100                                               # area pickups: PF.. one flag each (Buu's Fury's own story, which used these, is gone)
 WORLD = 26
 SPEAKER = dict(goku='goku'); NAME = dict(roshi='Master Roshi', chichi='Chi-Chi', kingkai='King Kai', kingyema='King Yemma', korrin='Korin', popo='Mr. Popo', raditz='Raditz', nappa='Nappa')
@@ -29,7 +30,7 @@ _with_energy()
 
 
 class Story:
-    QF, TF = QF, TF
+    QF, TF, RUN_EVENT = QF, TF, RUN_EVENT
 
     def __init__(self, log1, last_quest, ids, portraits, scenes_json):
         self.sets = conversations(log1); self.names = [l.split()[1] for l in open(log1 + '/assets/areas/SPRITES.txt')]
@@ -45,7 +46,10 @@ class Story:
         for n in ids:
             self.pickups[n] = []
             for k, p in enumerate(json.load(open('%s/assets/areas/area%02d.json' % (log1, n)))['pickups']): self.pickups[n].append(dict(p, flag=f, list='pk%d_%d' % (n, k))); f += 1
-        assert f <= 420, 'pickup flags overflow'
+        assert f <= EV, 'pickup flags overflow'
+        self.areas = {n: json.load(open('%s/assets/areas/area%02d.json' % (log1, n))) for n in ids}; self.labels = dict(l.rstrip('\n').split('\t', 1) for l in open(log1 + '/assets/text/strings.txt', encoding='latin1') if '\t' in l)
+        self.forms = {}; self.zones = []
+        for n, a in self.areas.items(): self.area_sets |= {t['arg'] for t in a['triggers'] if t['kind'] == 'event'}
 
     def _states(self):
         """Entries a set can start from later, other than 0."""
@@ -138,6 +142,11 @@ class Story:
             elif k == 'add_warp':
                 name = 'warp_q%d' % x['quest']; self.doors[a['area']].append(dict(kind='walk', rect=(a['x1'], a['y1'], a['x2'], a['y2']), list=name))
                 self.out += ['list ' + name, 'set_flag %d' % NOOP, 'unless_flag %d w%d_end' % (QF + x['quest'], x['quest'])] + self.warp(a['to_area'], a['to_x'], a['to_y']) + ['label w%d_end' % x['quest'], 'stop']
+            elif k == 'change_actor':
+                if self.names[a['sprite']] == 'goku': self.log['player sprite change skipped'] += 1
+                else: self.forms[(a['area'], a['sprite'])] = (QF + x['quest'], a['param'])
+            elif k == 'end_game': r.append('narrate THE END'); self.log['credits not done'] += 1
+            elif k in ('learn', 'speed_up'): self.log[k + ' left to the level system'] += 1
             else: self.log['action skipped: ' + k] += 1
         return r
 
@@ -211,20 +220,53 @@ class Story:
                 r.append('stop')
             self.out += r
 
+    def boss_gives_exp(self, n, sprite):
+        return any(t['type'] in ('activate', 'defeat') and t['sprite'] == sprite and t['area'] == n and any(a['type'] == 'give_exp' for a in x['actions']) for x in self.q for t in x['tasks'])
+
     def death_script(self, n, sprite, put):
-        """Bytecode run when a hostile boss dies: finish its 'activate' task. Quest results that need dialogue wait for the next talk or arrival."""
+        """Bytecode run when a story enemy dies: mark its tasks, then run quest_check, which plays the quest's dialogue and warps. None if it has no task."""
         import scenes
-        code = b''; next_area = None
+        ts = [t for x in self.q for t in x['tasks'] if t['type'] in ('activate', 'defeat') and t['sprite'] == sprite and t['area'] == n]
+        if not ts: return None
+        return put(scenes.assemble('; '.join('call 29 %d' % (TF + t['id']) for t in ts) + '; call 216 %d 0 0' % RUN_EVENT, {}) + b'\x11')
+
+    def zone_lists(self):
+        """Walk-in zones: quest zones, artifact spots, LoG1's events, messages, heal zones, warp squares and warps only flying reaches."""
+        once = EV; pick_item = {t['item']: t['id'] for x in self.q for t in x['tasks'] if t['type'] == 'spawn_item'}
         for x in self.q:
             for t in x['tasks']:
-                if t['type'] == 'activate' and t['sprite'] == sprite and t['area'] == n:
-                    code += scenes.assemble('call 29 %d; call 29 %d' % (TF + t['id'], QF + x['quest']), {})
-                    for a in x['actions']:
-                        if a['type'] == 'warp': next_area = a
-        if next_area: code += scenes.assemble('call 120 20; call 119 %d %d 1 %d %d; call 121 20' % (WORLD, next_area['area'] + 1, next_area['x'], next_area['y']), {})
-        return put(code + b'\x11')
+                i = t.get('id')
+                if t['type'] == 'enter_zone':
+                    self.doors[t['area']].append(dict(kind='walk', rect=(t['x1'], t['y1'], t['x2'], t['y2']), list='zone_t%d' % i))
+                    self.out += ['list zone_t%d' % i, 'set_flag %d' % NOOP, 'if_flag %d zn%d' % (TF + i, i), 'set_flag %d' % (TF + i), 'run quest_check', 'label zn%d' % i, 'stop']
+                elif t['type'] == 'obstacle':                           # the spot takes the artifact of the same number
+                    self.doors[t['area']].append(dict(kind='walk', rect=(t['x1'] - 8, t['y1'] - 8, t['x2'] + 8, t['y2'] + 8), list='obst_t%d' % i)); need = pick_item.get(t['param'])
+                    self.out += ['list obst_t%d' % i, 'set_flag %d' % NOOP, 'if_flag %d ob%d' % (TF + i, i)] + (['unless_flag %d ob%d' % (TF + need, i)] if need is not None else []) + ['set_flag %d' % (TF + i), 'narrate You put the artifact in place.', 'run quest_check', 'label ob%d' % i, 'stop']
+        for n, a in self.areas.items():
+            for k, t in enumerate(a['triggers']):
+                name = 'trg%d_%d' % (n, k); rect = tuple(t['rect'])
+                if t['kind'] == 'event':
+                    s_ = t['arg']; L = self.sets.get(s_, {})
+                    if t['entry'] not in L: continue
+                    body, nxt = chain(L, t['entry']); r = self.say(body)
+                    if nxt is not None and nxt != t['entry']: r += self.set_state(s_, nxt)
+                    for x in self.q:
+                        for u in x['tasks']:
+                            if u['type'] == 'after_conversation' and u['set'] == s_ and u['entry'] == t['entry']: r += ['set_flag %d' % (TF + u['id']), 'run quest_check']
+                    assert once < 420; self.out += ['list ' + name, 'set_flag %d' % NOOP, 'if_flag %d %s_e' % (once, name), 'set_flag %d' % once] + r + ['label %s_e' % name, 'stop']; once += 1
+                elif t['kind'] == 'message':
+                    txt = self.labels.get(t['text'])
+                    if not txt: self.log['message without text'] += 1; continue
+                    self.out += ['list ' + name, 'set_flag %d' % NOOP] + ['narrate ' + p for p in split_line(txt.replace('{', '(').replace('}', ')').strip())] + ['stop']
+                elif t['kind'] == 'hp_zone':
+                    if t['hp'] < 0: self.zones.append((n, rect, -t['hp'], t['mode'])); continue
+                    self.out += ['list ' + name, 'set_flag %d' % NOOP, 'do heal', 'stop']
+                elif t['kind'] == 'warp' and t['to_area'] in self.areas and (t['to_area'] == n or not t['mode'] & 1):
+                    self.out += ['list ' + name, 'set_flag %d' % NOOP] + self.warp(t['to_area'], t['to_x'], t['to_y']) + ['stop']
+                else: continue
+                self.doors[n].append(dict(kind='walk', rect=rect, list=name))
 
     def generate(self, path):
-        chk = self.check_list(); self.talk_lists(); self.place_lists(); self.pickup_lists(); self.out = chk + self.out
+        chk = self.check_list(); self.talk_lists(); self.place_lists(); self.pickup_lists(); self.zone_lists(); self.out = chk + self.out
         open(path, 'w', encoding='utf-8').write('\n'.join(self.out) + '\n')
         return dict(lines=sum(l.startswith('say') or l.startswith('narrate') for l in self.out), steps=len(self.out), doors=sum(map(len, self.doors.values())), hostile=len(self.hostile), walks=len(self.walks), flags_state=sum(map(len, self.state.values())), log=dict(self.log))

@@ -45,9 +45,9 @@ class Actors:
         self.ids[key] = len(self.table) + 9; self.table.append(self.ins.put(bytes(R)))
         return self.ids[key]
 
-    def row(self, sprite, death=0):
+    def row(self, sprite, death=0, no_exp=False):
         if (sprite, death) in self.rows: return self.rows[(sprite, death)]
-        e = self.csv[self.row_map[self.names.index(sprite)]]; R = bytearray(self.r[ST + 8 * 28:ST + 9 * 28]); hp = int(e['hp']); exp = int(e['exp'])
+        e = self.csv[self.row_map[self.names.index(sprite)]]; R = bytearray(self.r[ST + 8 * 28:ST + 9 * 28]); hp = int(e['hp']); exp = 0 if no_exp else int(e['exp'])
         struct.pack_into('<I', R, 0, exp); struct.pack_into('<I', R, 4, max(20, min(1500, hp // 10 if hp > 400 else hp * 4))); struct.pack_into('<I', R, 0x18, death)
         k = self.next_row; self.next_row += 1; assert k < 150; self.r[ST + k * 28:ST + (k + 1) * 28] = R; self.rows[(sprite, death)] = k; return k
 

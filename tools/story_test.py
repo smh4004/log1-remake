@@ -8,7 +8,7 @@
 import collections, json, os, struct, subprocess, sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__))); H = os.path.join(ROOT, 'vendor', 'gero-tools', 'tools', 'harness')
 rom, D, L, first, last = sys.argv[1:6]; first, last = int(first), int(last); ROM = open(rom, 'rb').read(); BASE = 0x030010BD; QF, TF = 420, 500; cur = ['start']
-names = [l.split()[1] for l in open(L + '/assets/areas/SPRITES.txt')]; Q = json.load(open(L + '/assets/story/quests.json'))['quests']; IDS = [0, 1, 2, 4, 5, 6, 7, 8, 9, 10]
+names = [l.split()[1] for l in open(L + '/assets/areas/SPRITES.txt')]; Q = json.load(open(L + '/assets/story/quests.json'))['quests']; IDS = list(range(42))
 AREAS = {n: json.load(open('%s/assets/areas/area%02d.json' % (L, n))) for n in IDS}
 sys.path[:0] = [os.path.join(ROOT, 'tools'), os.path.join(ROOT, 'vendor', 'gero-tools', 'tools')]
 import map_convert as C  # noqa: E402
@@ -123,9 +123,19 @@ def fight(n, t, f):
     def foes():
         run(['dump _e 03001bb0 84']); b = rd('_e'); c = struct.unpack_from('<I', b)[0]; return struct.unpack_from('<%dI' % c, b, 4)
     def at(o): run(['dump _x %08x 8' % (o + 0x1A0)]); return [v >> 8 for v in struct.unpack('<2i', rd('_x'))]
-    a = actor(n, names[t['sprite']])[0]; L = foes(); boss = min(L, key=lambda o: abs(at(o)[0] - a['x']) + abs(at(o)[1] - a['y']))
+    want = names[t['sprite']]; a = [x for x in AREAS[n]['actors'] if x['sprite'] == want]
+    if a:
+        for ox, oy in ((-30, 0), (30, 0), (0, 30), (0, -30), (-60, 0), (60, 0)):
+            if fits(n, a[0]['x'] + ox, a[0]['y'] + oy): place(a[0]['x'] + ox, a[0]['y'] + oy); break
+        step(['30'])
+    for w in range(6):
+        L = foes()
+        if L: break
+        step(['2 A', '30'])
+    if not L: print('  no enemy for', want); return bool(flag(f))
+    x0, y0 = (a[0]['x'], a[0]['y']) if a else pos(); boss = min(L, key=lambda o: abs(at(o)[0] - x0) + abs(at(o)[1] - y0))
     for i in range(300):
-        if flag(f) or flag(QF + 23) or area() != n: return True
+        if flag(f) or area() != n: return True
         if boss not in foes(): step(['2 A', '30']); continue
         e = at(boss); p = pos(); dx, dy = e[0] - p[0], e[1] - p[1]; k = ('RIGHT' if dx > 0 else 'LEFT') if abs(dx) >= abs(dy) else ('DOWN' if dy > 0 else 'UP')
         step(['%d %s' % (min(20, max(4, (abs(dx) + abs(dy)) // 2)), k)] if abs(dx) + abs(dy) > 26 else ['4 ' + k, '4 A', '10', '4 A', '10', '4 A', '14'])
@@ -156,7 +166,15 @@ def do_task(t):
         for i in range(4):
             if talk(n, a[0]['x'], a[0]['y'], f): return True
         return False
-    if k == 'activate': return fight(n, t, f)
+    if k in ('activate', 'defeat'): return fight(n, t, f)
+    if k == 'enter_zone':
+        x0, y0, x1, y1 = [max(0, v) for v in (t['x1'], t['y1'], t['x2'], t['y2'])]
+        for k2, dx, dy in DIRS:
+            sx, sy = (x0 + x1) // 2 - 8 + dx * ((x1 - x0) // 2 + 20), (y0 + y1) // 2 - 4 + dy * ((y1 - y0) // 2 + 20)
+            if fits(n, sx, sy): place(sx, sy); walk(k2, 40); step(['60'])
+            if flag(f): return True
+        place((x0 + x1) // 2 - 8, (y0 + y1) // 2 - 4); walk('LEFT', 8); walk('RIGHT', 8); step(['60']); return bool(flag(f))
+    if k == 'obstacle': return touch(n, t['x1'], t['y1'], f)
     print('  task type not driven', k); return False
 
 
