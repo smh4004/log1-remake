@@ -54,7 +54,7 @@ def doors():
     g = collections.defaultdict(list)
     for n, a in AREAS.items():
         for t in a['triggers']:
-            if t['kind'] == 'warp' and t['to_area'] in AREAS and t['mode'] & 1: g[n].append((t['to_area'], t['rect'], 0))
+            if t['kind'] == 'warp' and t['to_area'] in AREAS: g[n].append((t['to_area'], t['rect'], 0))
     for x in Q:
         for a in x['actions']:
             if a['type'] == 'add_warp' and a['area'] in AREAS and a['to_area'] in AREAS: g[a['area']].append((a['to_area'], (a['x1'], a['y1'], a['x2'], a['y2']), QF + x['quest']))
@@ -104,9 +104,15 @@ def travel(to):
                     for k, dx, dy in DIRS:
                         place(sx, sy); walk(k, 20); step(['80'])
                         if area() == v: ok = True; break
-        if not ok: ok = fly_into(n, seen[v][1], lambda: area() == v)
+        if not ok: ok = fly_into(n, seen[v][1], lambda: area() == v); land()
         if not ok: print('  door failed', n, '->', v, seen[v][1]); return False
         step(['90'])                                                    # no free(): walking up here would go back through the door
+
+
+def land():
+    """Back on foot, so later walks use the floor mask. A new area cancels flying by itself."""
+    run(['dump _s 0203ff05 1'])
+    if rd('_s')[0]: step(['4 R', '20'])
 
 
 def fly_into(n, rect, done):
@@ -184,12 +190,12 @@ def fight(n, t, f):
 def do_task(t):
     k = t['type']; f = TF + t.get('id', 0)
     if k == 'after_quest' or flag(f): return True
-    if not travel(t['area']): return False
+    if not travel(t['area']) and not travel(t['area']): return False
     n = t['area']
     if k == 'spawn_item':
         for i in range(3):                                              # an enemy can knock the player off the way
             if touch(n, t['x'], t['y'], f): return True
-        return False
+        place(t['x'] - 30, t['y']); step(['2']); place(t['x'], t['y']); step(['40']); return bool(flag(f))     # stepping straight into the zone
     if k == 'place_item':
         place(t['x1'], t['y2'] + 20); walk('UP', 16); step(['30'])    # the gap before this one is open by now
         return bool(flag(f)) or touch(n, t['x1'], t['y1'], f)
@@ -212,7 +218,7 @@ def do_task(t):
             if fits(n, sx, sy): place(sx, sy); walk(k2, 40); step(['60'])
             if flag(f): return True
         if flag(f): return True
-        return fly_into(n, (x0, y0, x1, y1), lambda: flag(f))
+        r_ = fly_into(n, (x0, y0, x1, y1), lambda: flag(f)); land(); return r_
     if k == 'obstacle': return touch(n, t['x1'], t['y1'], f)
     print('  task type not driven', k); return False
 
