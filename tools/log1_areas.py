@@ -8,7 +8,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path[:0] = [os.path.join(ROOT, 'tools'), os.path.join(ROOT, 'vendor', 'gero-tools', 'tools')]
 import map_convert as C  # noqa: E402
 
-BB, WORLD, MAX_ENEMIES = 0x08000000, 26, 30
+BB, WORLD = 0x08000000, 26
 AREAS, COUNT, TABLE_LIT, COUNT_INSN = 0x8E2E0, 452, 0x8A58, 0x125E0     # same values as Gero's tools/areas.py
 # first-listed scouter ID is used until forms are confirmed
 BF_IDX = dict(roshi=186, bulma=41, krillin1=166, krillin2=166, gohan1=107, gohan2=107, gohan3=107, goku=115, chichi=66, piccolo=222, yamcha=302, tien=264, chaitzu=65, kingkai=161, kingyema=163, popo=193, korrin=165, puar=233, dende=77, bubbles=40, gregory=135)
@@ -54,6 +54,7 @@ def arrival(a, x, y, key):
 
 
 def build(r, log1, ids, story, named, actors):
+    picks = []; foes_out = []
     """Add areas `ids` from the story plan. Returns (table offset, hook spawn rows, hook walk rows, skipped characters)."""
     tmpl = next(bytes(r[e:e + 56]) for e in range(AREAS, AREAS + 56 * COUNT, 56) if r[e] == 1 and r[e + 1] == 1)
     cache = {}; entries = []; skipped = []; idset = set(ids); moved = []; addr = {}; spawns = []; D = {'down': 0, 'up': 1, 'left': 2, 'right': 3}
@@ -76,17 +77,16 @@ def build(r, log1, ids, story, named, actors):
             x0, y0, x1, y1 = [max(0, v) for v in d['rect']]; exits.append(struct.pack('<II', 0, put(struct.pack('<IIHHHHI', 0x0800742D, 0x080077DF, x0, y0, x1, y1, named[d['list']]))))
         recs = bytearray(); offs = []; enemy_objs = []
         flags = story.qof
-        # BF's enemy list has 32 slots (0x03001BB4), directly before the player pointer (0x03001C34): a 33rd enemy overwrites it.
-        foes = [s for s in a.info['actors'] if s['kind'] == 2]; keep = {id(foes[i * len(foes) // MAX_ENEMIES]) for i in range(MAX_ENEMIES)} if len(foes) > MAX_ENEMIES else {id(s) for s in foes}
+        # BF's object list takes 27 area objects (it ends before the table at 0x03001CC8), so enemies and pickups stream in (src/flight.c).
+        foe_i = 0
         for s in a.info['actors']:
             cond = 0x20002
-            if s['kind'] == 2 and id(s) not in keep: skipped.append((n, 'enemy', 'over the 32-slot limit')); continue
             if s['show'] == 1: cond = 0x20000 | (story.QF + flags[s['flag']])
             elif s['show'] == 2: cond = 0x10000 | (story.QF + flags[s['flag']])
             sid = story.names.index(s['sprite'])
             if s['kind'] == 2:
                 row = actors.row(s['sprite']); ch = actors.actor(s['sprite'], True)
-                enemy_objs.append(put(struct.pack('<8I', 0x0800FD55, 0 if s['show'] == 0 else cond, row, (s['y'] << 16) | s['x'], ch, 0x080555A0, 1, 0x080716EC))); continue
+                foes_out.append((n, foe_i, s['x'], s['y'], put(struct.pack('<8I', 0x0800FD55, 0 if s['show'] == 0 else cond, row, (s['y'] << 16) | s['x'], ch, 0x080555A0, 1, 0x080716EC)))); foe_i += 1; assert foe_i <= 64; continue
             idx = BF_IDX.get(s['sprite']) or actors.actor(s['sprite'], False)
             talk = named.get('talk_set%02d' % s['param'], 0); offs.append(len(recs))
             recs += struct.pack('<9I', 0x0800A223, 0x32, 0x08017DA3, cond, (s['y'] << 16) | s['x'], talk, idx, 1, 0)
@@ -103,6 +103,13 @@ def build(r, log1, ids, story, named, actors):
                 elif t['type'] == 'escort' and t['area'] == n:
                     sp = story.names[t['follower']]; idx = BF_IDX.get(sp) or actors.actor(sp, False)
                     offs.append(len(recs)); recs += struct.pack('<9I', 0x0800A223, 0x32, 0x08017DA3, 0x10000 | (story.TF + t['id']), (t['y'] << 16) | t['x'], named.get('talk_set%02d' % t['after_set'], 0), idx, 1, 0)
+        # pickups stream in (src/flight.c): an object 8 px below LoG1's spot, as its frame is bottom-centred
+        def item(i, x, y, f):
+            rec = put(struct.pack('<9I', 0x0800A223, 0x32, 0x08017DA3, 0x20002, ((y + 8) << 16) | x, named['no_talk'], actors.pickup(i), 1, 0)); struct.pack_into('<I', r, rec - BB + 32, rec); picks.append((n, f, x, y + 8, rec + 8))
+        for p in story.pickups.get(n, []): item(p['id'], p['x'], p['y'], p['flag'])
+        for x_ in story.q:
+            for t in x_['tasks']:
+                if t['type'] == 'spawn_item' and t['area'] == n: item(t['item'], t['x'], t['y'], story.TF + t['id'])
         objs = []
         if recs:
             blk = put(bytes(recs))
@@ -115,4 +122,4 @@ def build(r, log1, ids, story, named, actors):
     struct.pack_into('<I', r, TABLE_LIT, tab); a_ = min(0xFF, cnt // 2)
     struct.pack_into('<4H', r, COUNT_INSN, 0x2000 | a_, 0x0040, 0x3000 | (cnt - 2 * a_), 0x4770)
     ent = lambda n: tab + 56 * (COUNT + addr[n])
-    return tab, [(f, ent(n), rec, idx) for f, n, rec, idx in spawns], [(f, ent(n), x1, y1, x2, y2) for f, n, x1, y1, x2, y2 in story.walks if n in idset], skipped, moved
+    return tab, [(f, ent(n), rec, idx) for f, n, rec, idx in spawns], [(f, ent(n), x1, y1, x2, y2) for f, n, x1, y1, x2, y2 in story.walks if n in idset], [(ent(n), f, x, y, rec) for n, f, x, y, rec in picks], [(ent(n), f, x, y, rec) for n, f, x, y, rec in foes_out], skipped, moved

@@ -27,6 +27,91 @@ typedef struct { u32 flag, area; u16 x1, y1, x2, y2; } walk_t;
 __attribute__((section(".text.table"))) volatile const walk_t walk_table[16] = {{0, 0, 0, 0, 0, 0}};
 #define WDONE  ((volatile u8 *)0x0203FF30)   /* 16 bytes */
 
+/* NPCs stamp their 16x8 feet into the live masks, and removal leaves the stamp behind. */
+static void remove_npc(void *npc) {
+    int x = *(int *)((u8 *)npc + 0x1A0) >> 8, y = *(int *)((u8 *)npc + 0x1A4) >> 8;
+    for (int m = 0; m < 3; m++)
+        for (int ty = y >> 3; ty <= (y + 7) >> 3; ty++) for (int t = x >> 3; t <= (x + 15) >> 3; t++)
+            if (t >= 0 && t < 256 && ty >= 0 && ty < 256) ((volatile u8 **)0x03001A4C)[m][ty * 32 + (t >> 3)] |= 1 << (t & 7);
+    ((add_fn)0x08011945)(OBJS, npc);
+}
+
+/* Pickups stream in near the player, as BF's object list takes only 27 area objects. Table of {area, flag, x, y, record}, ending in area 0.
+ * They don't block: masks are restored around the spawn, which stamps the NPC's feet. */
+typedef struct { u32 area; u16 flag, x, y; u32 rec; } pick_t;
+__attribute__((section(".text.table"))) volatile const u32 pick_ptr = 0;
+typedef struct { const pick_t *row; void *obj; } slot_t;
+#define SLOTS  ((slot_t *)0x0203FF40)         /* MAX_SLOTS entries */
+#define MAX_SLOTS 6
+#define TICK   (*(volatile u8 *)0x0203FF70)
+#define OBJ_N  (*(volatile u32 *)0x03001C50)
+#define MASKS  ((u8 *volatile *)0x03001A4C)
+
+static void spawn_pick(const pick_t *p, slot_t *s) {
+    int x0 = p->x >> 3, x1 = (p->x + 15) >> 3, y0 = p->y >> 3, y1 = (p->y + 7) >> 3; u8 save[3][2][2];
+    for (int m = 0; m < 3; m++) for (int y = 0; y < 2; y++) for (int b = 0; b < 2; b++) save[m][y][b] = MASKS[m][(y0 + y) * 32 + (x0 >> 3) + b];
+    u32 *rec = (u32 *)p->rec; void *obj = ((spawn_fn)rec[0])(rec, 0); ((add_fn)0x0801191B)(OBJS, obj);
+    for (int m = 0; m < 3; m++) for (int y = 0; y < 2; y++) for (int b = 0; b < 2; b++) MASKS[m][(y0 + y) * 32 + (x0 >> 3) + b] = save[m][y][b];
+    s->row = p; s->obj = obj; (void)x1; (void)y1;
+}
+
+static void live_pick(int new_area) {
+    slot_t *S = SLOTS;
+    if (new_area) { for (int i = 0; i < MAX_SLOTS; i++) S[i].row = 0; return; }
+    if (!PLAYER || (TICK++ & 7)) return;
+    int px = *(int *)(PLAYER + 0x1A0) >> 8, py = *(int *)(PLAYER + 0x1A4) >> 8;
+    for (int i = 0; i < MAX_SLOTS; i++) {
+        const pick_t *p = S[i].row;
+        if (!p) continue;
+        int dx = p->x - px, dy = p->y - py;
+        if (FLAGS[p->flag >> 3] >> (p->flag & 7) & 1 || dx > 200 || dx < -200 || dy > 160 || dy < -160) { ((add_fn)0x08011945)(OBJS, S[i].obj); S[i].row = 0; }
+    }
+    for (const pick_t *p = (const pick_t *)pick_ptr; p && p->area; p++) {
+        if (p->area != AREA || FLAGS[p->flag >> 3] >> (p->flag & 7) & 1) continue;
+        int dx = p->x - px, dy = p->y - py, free_ = -1, have = 0;
+        if (dx > 160 || dx < -160 || dy > 120 || dy < -120) continue;
+        for (int i = 0; i < MAX_SLOTS; i++) { if (S[i].row == p) have = 1; else if (!S[i].row) free_ = i; }
+        if (!have && free_ >= 0 && OBJ_N < 29) spawn_pick(p, &S[free_]);
+    }
+}
+
+/* Enemies stream too, so an area keeps all of LoG1's enemies with no more than ESLOTS alive: table of {area, index in area, x, y, record},
+ * ending in area 0. One that leaves the object list has died and stays dead for this visit (DEAD holds one bit per index). */
+__attribute__((section(".text.table"))) volatile const u32 foe_ptr = 0;
+typedef struct { const pick_t *row; void *obj; } fslot_t;
+#define FOES   ((fslot_t *)0x0203FF80)
+#define ESLOTS 14
+#define DEAD   ((volatile u8 *)0x0203FFF0)    /* 8 bytes */
+#define OBJ_AT ((void *volatile *)0x03001C54)
+typedef int (*cond_fn)(u32);
+#define COND_FN 0x08004785
+
+static int listed(void *o) { for (u32 i = 0; i < OBJ_N; i++) if (OBJ_AT[i] == o) return 1; return 0; }
+
+static void live_foes(int new_area) {
+    fslot_t *S = FOES;
+    if (new_area) { for (int i = 0; i < ESLOTS; i++) S[i].row = 0; for (int i = 0; i < 8; i++) DEAD[i] = 0; return; }
+    if (!PLAYER || (TICK & 7) != 5) return;
+    int px = *(int *)(PLAYER + 0x1A0) >> 8, py = *(int *)(PLAYER + 0x1A4) >> 8;
+    for (int i = 0; i < ESLOTS; i++) {
+        const pick_t *p = S[i].row;
+        if (!p) continue;
+        if (!listed(S[i].obj)) { DEAD[p->flag >> 3] |= 1 << (p->flag & 7); S[i].row = 0; continue; }
+        int dx = (*(int *)((u8 *)S[i].obj + 0x1A0) >> 8) - px, dy = (*(int *)((u8 *)S[i].obj + 0x1A4) >> 8) - py;
+        if (dx > 240 || dx < -240 || dy > 190 || dy < -190) { ((add_fn)0x08011945)(OBJS, S[i].obj); S[i].row = 0; }
+    }
+    for (const pick_t *p = (const pick_t *)foe_ptr; p && p->area; p++) {
+        if (p->area != AREA || DEAD[p->flag >> 3] >> (p->flag & 7) & 1) continue;
+        int dx = p->x - px, dy = p->y - py, free_ = -1, have = 0;
+        if (dx > 190 || dx < -190 || dy > 150 || dy < -150) continue;
+        for (int i = 0; i < ESLOTS; i++) { if (S[i].row == p) have = 1; else if (!S[i].row) free_ = i; }
+        if (have || free_ < 0 || OBJ_N >= 27) continue;
+        u32 *rec = (u32 *)p->rec;
+        if (rec[1] && !((cond_fn)COND_FN)(rec[1])) continue;
+        void *o = ((spawn_fn)rec[0])(rec, p->flag); ((add_fn)0x0801191B)(OBJS, o); S[free_].row = p; S[free_].obj = o;
+    }
+}
+
 static void live_walk(int new_area) {
     for (int i = 0; i < 16 && walk_table[i].flag; i++) {
         volatile const walk_t *w = &walk_table[i];
@@ -47,12 +132,7 @@ static void live_spawn(int new_area) {
         DONE[i] = 1;
         if (s->remove) {
             void *npc = ((find_fn)0x08011C71)(OBJS, 5, ((int (*)(int))0x08000159)(s->remove));
-            if (npc) {   /* NPCs stamp their 16x8 feet into the live masks, and removal leaves the stamp behind */
-                int x = *(int *)((u8 *)npc + 0x1A0) >> 11, y = *(int *)((u8 *)npc + 0x1A4) >> 11;
-                for (int m = 0; m < 3; m++) for (int t = x; t < x + 2; t++) if (t >= 0 && t < 256 && y >= 0 && y < 256)
-                    ((volatile u8 **)0x03001A4C)[m][y * 32 + (t >> 3)] |= 1 << (t & 7);
-                ((add_fn)0x08011945)(OBJS, npc);
-            }
+            if (npc) remove_npc(npc);
         }
         u32 *rec = (u32 *)s->record;
         if (!rec) continue;                                 /* removal only: a character who started following the player */
@@ -69,6 +149,8 @@ void flight_keys(u8 *st) {
     if (fresh) { LAST = AREA; STATE[1] = 0; }
     live_spawn(fresh);
     live_walk(fresh);
+    live_pick(fresh);
+    live_foes(fresh);
     int r = (k & KEY_R) != 0, pressed = r && !STATE[0]; STATE[0] = r;
     if (!pressed || !PLAYER) return;
     if (STATE[1]) {

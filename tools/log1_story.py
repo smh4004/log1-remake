@@ -1,16 +1,31 @@
 """M4: generate LoG1's story up to a chosen quest as Buu's Fury scripts, from extracted data at build time. Output stays in out/.
 
 Flags: quest n = 420 + n, task t = 500 + t, conversation state from 620. A set's state is the entry it starts from next.
-Defaults on the review list: no visible followers on escorts, Senzu Beans for pickups, no item graphics, cutscenes play only
+Defaults on the review list: no visible followers on escorts, LoG1 pickups mapped to Buu's Fury items (log1_pickups), cutscenes play only
 their conversations, and music changes are skipped until the music plan (M8).
 """
 import collections, json, os, sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__))); sys.path.insert(0, os.path.join(ROOT, 'tools'))
 from convert_log1 import chain, conversations, split_line  # noqa: E402
+import log1_pickups as P  # noqa: E402
 
 QF, TF, EF, TOK, NOOP = 420, 500, 620, 870, 895
-WORLD, SENZU = 26, 21
+PF = 100                                               # area pickups: PF.. one flag each (Buu's Fury's own story, which used these, is gone)
+WORLD = 26
 SPEAKER = dict(goku='goku'); NAME = dict(roshi='Master Roshi', chichi='Chi-Chi', kingkai='King Kai', kingyema='King Yemma', korrin='Korin', popo='Mr. Popo', raditz='Raditz', nappa='Nappa')
+
+
+def _with_energy():
+    """Adds 'energy N' to the scene assembler: ki += N, the same code as Buu's Fury's Milk."""
+    import scenes
+    orig = scenes.assemble
+    def assemble(text, actors):
+        out = b''
+        for part in [p.strip() for p in text.split(';') if p.strip()]:
+            out += bytes([0x02, 0x0E, 0x00, int(part.split()[1]), 0x07, 0x03, 0x0E]) if part.startswith('energy ') else orig(part, actors)
+        return out
+    scenes.assemble = assemble
+_with_energy()
 
 
 class Story:
@@ -26,7 +41,11 @@ class Story:
             for a in json.load(open('%s/assets/areas/area%02d.json' % (log1, n)))['actors']:
                 if a['kind'] != 2: self.area_sets.add(a['param'])
         self.area_sets |= {t['after_set'] for x in self.q for t in x['tasks'] if t['type'] == 'escort' and t['area'] in self.ids}
-        self._states(); self._place_groups()
+        self._states(); self._place_groups(); self.rom = open(os.path.join(ROOT, 'rom', 'log1.gba'), 'rb').read(); self.pickups = {}; f = PF
+        for n in ids:
+            self.pickups[n] = []
+            for k, p in enumerate(json.load(open('%s/assets/areas/area%02d.json' % (log1, n)))['pickups']): self.pickups[n].append(dict(p, flag=f, list='pk%d_%d' % (n, k))); f += 1
+        assert f <= 420, 'pickup flags overflow'
 
     def _states(self):
         """Entries a set can start from later, other than 0."""
@@ -105,7 +124,11 @@ class Story:
         for a in x['actions']:
             k = a['type']
             if k == 'give_exp': r.append('do call 194 %d' % a['amount'])
-            elif k == 'give_pickup': r.append('do call 128 %d' % SENZU); self.log['pickup uses Senzu Bean'] += 1
+            elif k == 'give_pickup':
+                if a['item'] in P.BF_ITEM: r.append('do call 128 %d' % P.BF_ITEM[a['item']])
+                else: self.log['pickup with no Buu\'s Fury item: %d' % a['item']] += 1
+                t = P.message(self.rom, a['item'])
+                if t: r.append('narrate ' + t.replace('{', '(').replace('}', ')'))
             elif k == 'conversation': r += self.say(chain(self.sets[a['set']], a['entry'])[0])
             elif k == 'set_entry': r += self.set_state(a['set'], a['entry'])
             elif k == 'scene': r += self.scene(a['index'])
@@ -129,6 +152,19 @@ class Story:
         r += ['stop']
         return r
 
+    def zone(self, x, y): return (x - 10, y - 6, x + 26, y + 24)
+
+    def pickup_lists(self):
+        self.out += ['list no_talk', 'set_flag %d' % NOOP, 'stop']
+        for n, L in self.pickups.items():
+            for p in L:
+                self.doors[n].append(dict(kind='walk', rect=self.zone(p['x'], p['y']), list=p['list'])); e = p['flag']; r = ['list ' + p['list'], 'set_flag %d' % NOOP, 'if_flag %d pk_e%d' % (e, e), 'set_flag %d' % e]
+                if p['id'] in P.ENERGY: r.append('do energy %d' % P.ENERGY[p['id']])
+                else:
+                    if p['id'] in P.BF_ITEM: r.append('do call 128 %d' % P.BF_ITEM[p['id']])
+                    r.append('narrate ' + P.message(self.rom, p['id']).replace('{', '(').replace('}', ')'))
+                self.out += r + ['label pk_e%d' % e, 'stop']
+
     def add_token(self, i):
         g = self.token.get(i)
         if not g: return []
@@ -143,8 +179,8 @@ class Story:
                 if t['type'] in ('talk_with_item', 'talk_with_kind', 'spawn_character', 'escort') and 'set' in t: tasks[t['set']].append((x, t))
             for t in x['tasks']:
                 if t['type'] == 'spawn_item':
-                    self.pick[(x['quest'], t['item'])] = t['id']; self.doors[t['area']].append(dict(kind='walk', rect=(t['x'] - 8, t['y'] - 8, t['x'] + 16, t['y'] + 16), list='pick_t%d' % t['id']))
-                    self.out += ['list pick_t%d' % t['id'], 'set_flag %d' % NOOP, 'if_flag %d p%d' % (TF + t['id'], t['id']), 'set_flag %d' % (TF + t['id'])] + self.add_token(t['id']) + ['narrate You found an item.', 'run quest_check', 'label p%d' % t['id'], 'stop']
+                    self.pick[(x['quest'], t['item'])] = t['id']; self.doors[t['area']].append(dict(kind='walk', rect=self.zone(t['x'], t['y']), list='pick_t%d' % t['id']))
+                    self.out += ['list pick_t%d' % t['id'], 'set_flag %d' % NOOP, 'if_flag %d p%d' % (TF + t['id'], t['id']), 'set_flag %d' % (TF + t['id'])] + self.add_token(t['id']) + ['narrate ' + P.message(self.rom, t['item']).replace('{', '(').replace('}', ')'), 'run quest_check', 'label p%d' % t['id'], 'stop']
         after = collections.defaultdict(list)
         for x in self.q:
             for t in x['tasks']:
@@ -189,6 +225,6 @@ class Story:
         return put(code + b'\x11')
 
     def generate(self, path):
-        chk = self.check_list(); self.talk_lists(); self.place_lists(); self.out = chk + self.out
+        chk = self.check_list(); self.talk_lists(); self.place_lists(); self.pickup_lists(); self.out = chk + self.out
         open(path, 'w', encoding='utf-8').write('\n'.join(self.out) + '\n')
         return dict(lines=sum(l.startswith('say') or l.startswith('narrate') for l in self.out), steps=len(self.out), doors=sum(map(len, self.doors.values())), hostile=len(self.hostile), walks=len(self.walks), flags_state=sum(map(len, self.state.values())), log=dict(self.log))

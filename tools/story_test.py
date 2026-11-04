@@ -111,6 +111,18 @@ def actor(n, sprite, st=None):
     return [a for a in AREAS[n]['actors'] if a['kind'] != 2 and a['sprite'] == sprite and (st is None or a['param'] == st)]
 
 
+def fight(n, t, f):
+    """Talk to the boss's NPC is done by the quest before; chase the last enemy in the list and hit it."""
+    for i in range(200):
+        if flag(f) or flag(QF + 23) or area() != n: return True
+        run(['dump _e 03001bb0 84']); b = rd('_e'); c = struct.unpack_from('<I', b)[0]
+        if not c: step(['2 A', '30']); continue
+        run(['dump _x %08x 8' % (struct.unpack_from('<I', b, 4 * c)[0] + 0x1A0)]); e = [v >> 8 for v in struct.unpack('<2i', rd('_x'))]; p = pos()
+        dx, dy = e[0] - p[0], e[1] - p[1]; k = ('RIGHT' if dx > 0 else 'LEFT') if abs(dx) >= abs(dy) else ('DOWN' if dy > 0 else 'UP')
+        step(['%d %s' % (min(20, max(4, (abs(dx) + abs(dy)) // 2)), k)] if abs(dx) + abs(dy) > 26 else ['4 ' + k, '4 A', '10', '4 A', '10', '4 A', '14'])
+    return False
+
+
 def do_task(t):
     k = t['type']; f = TF + t.get('id', 0)
     if k == 'after_quest' or flag(f): return True
@@ -131,6 +143,7 @@ def do_task(t):
         for i in range(4):
             if talk(n, a[0]['x'], a[0]['y'], f): return True
         return False
+    if k == 'activate': return fight(n, t, f)
     print('  task type not driven', k); return False
 
 

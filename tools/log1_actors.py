@@ -32,6 +32,19 @@ class Actors:
         self.ids[key] = len(self.table) + 9; self.table.append(self.ins.put(bytes(R)))
         return self.ids[key]
 
+    def pickup(self, i):
+        """An NPC actor showing LoG1 pickup i in every direction and frame."""
+        key = ('pickup', i)
+        if key in self.ids: return self.ids[key]
+        import log1_pickups
+        img = log1_pickups.frame(self.log1, self.r, i); tp = self.table[T_NPC] - BB; n = struct.unpack_from('<I', self.r, tp)[0] & 0xFF; R = bytearray(self.r[tp:tp + 0x54 + 4 * n]); struct.pack_into('<I', R, 0x50, 0)
+        for k in range(n):
+            a = struct.unpack_from('<I', R, 0x54 + 4 * k)[0]
+            if a >> 24 != 8: continue
+            want = struct.unpack_from('<I', self.r, a - BB)[0]; struct.pack_into('<I', R, 0x54 + 4 * k, self.ins.anim([[img] * want] * 3))
+        self.ids[key] = len(self.table) + 9; self.table.append(self.ins.put(bytes(R)))
+        return self.ids[key]
+
     def row(self, sprite, death=0):
         if (sprite, death) in self.rows: return self.rows[(sprite, death)]
         e = self.csv[self.row_map[self.names.index(sprite)]]; R = bytearray(self.r[ST + 8 * 28:ST + 9 * 28]); hp = int(e['hp']); exp = int(e['exp'])
