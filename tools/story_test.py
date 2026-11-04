@@ -78,6 +78,13 @@ def travel(to):
             else: continue
             place(sx, sy); walk(k, 40); step(['80'])
             if area() == v: ok = True; break
+        if not ok:                                                      # a door set into a wall: stand inside the zone and press towards it
+            for sy in range(y0, y1, 8):
+                for sx in range(x0, x1, 8):
+                    if ok or not fits(n, sx, sy): continue
+                    for k, dx, dy in DIRS:
+                        place(sx, sy); walk(k, 20); step(['80'])
+                        if area() == v: ok = True; break
         if not ok: print('  door failed', n, '->', v, seen[v][1]); return False
         free()
 
