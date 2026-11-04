@@ -154,3 +154,6 @@ Door keys: a zone at a map edge leaves over that edge, across its short side. El
 A strict run from a new game, with no test warps, completed all 75 quests on `459a37b0` with no game overs. The bot needed three passes, as LoG1's quest numbers aren't story order. It teleports beside targets and tops up HP, so walking routes and balance are untested.
 Limits found on the way: animated tiles above 17 crash an area load (the temple has 29-32), and the temple's 240x240 map needed splitting. After the credits, native 0xD1 needs an area load behind it or the game sits on a black screen.
 New game starts Goku at level 60 with 135 HP; balancing has to deal with that.
+
+## Music (`tools/log1_music.py`, 2026-11-04)
+Both games use Webfoot's tracker engine. Buu's Fury's song records add sample table and dictionary pointers, so LoG1's 18 songs copy across as tracks 53-70 with its 20 samples, and the song table moves to hold them. Checked in the harness: each tested area selects the right song, the player advances and the mixer output isn't silent. Not checked by ear. Mixer timer: Buu's Fury 0xFBE6, LoG1 0xFB50, so tempo and pitch need a listen.
