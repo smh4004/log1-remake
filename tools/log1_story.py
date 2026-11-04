@@ -128,7 +128,8 @@ class Story:
     def movable(self, area, sprite):
         """A character a scene can walk: always in this area and never hostile there. The player is left out for now."""
         name = self.names[sprite] if sprite < len(self.names) else None
-        if not name or name == 'goku' or area not in self.areas or (area, sprite) in self.hostile_all: return None
+        if name == 'goku': return dict(x=None)                 # the player: actor index 0 in Buu's Fury's scripts
+        if not name or area not in self.areas or (area, sprite) in self.hostile_all: return None
         return next((a for a in self.areas[area]['actors'] if a['kind'] != 2 and a['sprite'] == name and a['show'] == 0), None)
 
     def scene(self, i, area=None):
@@ -144,10 +145,12 @@ class Story:
                 if f == '0800CB25': x, y = struct.unpack_from('<HH', b, 4)
                 else:
                     o = self.movable(area, b[2])
-                    if not o: a = None
+                    if not o or o['x'] is None: a = None                # no fixed spot to walk to
                     else: x, y = o['x'] + struct.unpack_from('<h', b, 4)[0], o['y'] + struct.unpack_from('<h', b, 6)[0]
                 if a:
-                    nm = self.names[b[0]]; self.move_names.add(nm); r.append('do call 56; call 96 %s %d %d; call 58' % (nm, x, y)); continue
+                    nm = self.names[b[0]]
+                    if nm == 'goku': r.append('do call 56; call 96 0 %d %d; call 58' % (x, y)); continue
+                    self.move_names.add(nm); r.append('do call 56; call 96 %s %d %d; call 58' % (nm, x, y)); continue
             self.log['scene command skipped'] += 1
         return r
 
@@ -174,7 +177,7 @@ class Story:
             elif k == 'change_actor':
                 if self.names[a['sprite']] == 'goku': self.log['player sprite change skipped'] += 1
                 else: self.forms[(a['area'], a['sprite'])] = (QF + x['quest'], a['param'])
-            elif k == 'end_game': r += ['narrate THE END', 'do call 120 25', 'set_flag 892']; self.log['credits not done'] += 1   # the hook then restarts the game
+            elif k == 'end_game': r += ['do call 120 25', 'do call 209']                # native 0xD1: Buu's Fury's credits roll
             elif k in ('learn', 'speed_up'): self.log[k + ' left to the level system'] += 1
             else: self.log['action skipped: ' + k] += 1
         return r
