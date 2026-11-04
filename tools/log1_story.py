@@ -178,7 +178,7 @@ class Story:
             elif k == 'change_actor':
                 if self.names[a['sprite']] == 'goku': self.log['player sprite change skipped'] += 1
                 else: self.forms[(a['area'], a['sprite'])] = (QF + x['quest'], a['param'])
-            elif k == 'end_game': r += ['do call 120 25', 'do call 209']                # native 0xD1: Buu's Fury's credits roll
+            elif k == 'end_game': r += ['do call 120 25', 'do call 209', 'do call 119 %d 1 1 256 168; call 121 30' % WORLD]   # native 0xD1 rolls Buu's Fury's credits, as its own ending does; then free roam from Kame House
             elif k in ('learn', 'speed_up'): self.log[k + ' left to the level system'] += 1
             else: self.log['action skipped: ' + k] += 1
         return r
