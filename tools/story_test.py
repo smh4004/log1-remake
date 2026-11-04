@@ -183,7 +183,7 @@ def fight(n, t, f):
         step(['2 A', '30'])
     if not L: print('  no enemy for', want); return bool(flag(f))
     x0, y0 = (a[0]['x'], a[0]['y']) if a else pos(); boss = min(L, key=lambda o: abs(at(o)[0] - x0) + abs(at(o)[1] - y0))
-    for i in range(300):
+    for i in range(700):
         if flag(f) or area() != n: return True
         if boss not in foes(): step(['2 A', '30']); continue
         e = at(boss)
