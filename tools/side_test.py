@@ -31,10 +31,10 @@ for i, b in enumerate(S.BOUNTIES):
     n = b['area']; print('warp', warp(n), area()); x, y = near(n, *b['at']); ok = kill(n, x, y, S.KILLED + i); free(30); print('bounty', i, b['name'], 'killed', ok, 'paid', flag(S.PAID + i), area(), pos(), flush=True)
 print('talk board again', warp(17), talk(17, *near(17, 360, 320), S.OPEN), free(30))
 for i, c in enumerate(S.CHESTS):
-    n = c['area']; warp(n); x, y = c['at']; print('chest', i, n, c['gear'], 'fits', fits(n, x, y), end=' '); place(*near(n, x - 30, y)); step(['2']); place(*near(n, x, y)); step(['40']); print('got', flag(S.CHEST + i), 'free', free(12), pos(), flush=True)
-    step(['4 RIGHT', '4 LEFT', '4 UP', '4 DOWN', '20'])
+    n = c['area']; warp(n); x, y = c['at']; print('chest', i, n, c['gear'], 'fits', fits(n, x, y), end=' '); step(['20']); place(*near(n, 8, 8)); step(['10']); place(x, y); step(['40']); got = flag(S.CHEST + i); step(['2 A', '40', '2 A', '40']); a_ = pos(); walk('RIGHT', 12); walk('LEFT', 12); walk('DOWN', 12); walk('UP', 12); print('got', got, 'moves', pos() != a_ or a_, pos(), flush=True)
 run(['dump _s 03001c50 4']); print('objs', rd('_s').hex())
 setf(S.GATHERED); warp(12); step(['40'])
+run(['dump _o 03001c50 90']); b_ = rd('_o'); n_ = struct.unpack_from('<I', b_)[0]; print('objects', n_, [at(p) for p in struct.unpack_from('<%dI' % min(n_, 34), b_, 4)][:n_]); print('spirit spots', [near(12, *s['at']) for s in S.SPIRITS], 'flag', flag(S.GATHERED))
 for i, s in enumerate(S.SPIRITS):
     x, y = near(12, *s['at']); print('spirit', i, s['sprite'], 'talk', talk(12, x, y, S.S_START + i), free(30), 'follow', end=' ')
     run(['dump _f 0203ff74 4']); print(rd('_f').hex(), end=' ')
