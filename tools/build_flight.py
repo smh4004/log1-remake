@@ -4,7 +4,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ENTRY, CODE = 0x3D4A0, 0xBF0000
 
 
-def install(rom, spawns=(), walks=(), picks=(), foes=(), zones=()):
+def install(rom, spawns=(), walks=(), picks=(), foes=(), zones=(), check=0):
     """spawns: up to 32 (flag, area entry bus address, record bus address, NPC index to remove or 0) rows for live_spawn."""
     assert len(spawns) <= 32 and len(walks) <= 16
     d = tempfile.mkdtemp(); o, e, b = (os.path.join(d, n) for n in ('f.o', 'f.elf', 'f.bin'))
@@ -29,6 +29,7 @@ def install(rom, spawns=(), walks=(), picks=(), foes=(), zones=()):
     pf = int(next(l.split()[0] for l in syms.splitlines() if l.endswith('foe_ptr')), 16) - 0x08000000; rom[at + len(tb):at + len(tb) + len(tf)] = tf; struct.pack_into('<I', rom, pf, 0x08000000 + at + len(tb))
     z = b''.join(struct.pack('<I4hHH', a, x0, y0, x1, y1, d, m) for a, x0, y0, x1, y1, d, m in zones) + bytes(16); zo = at + len(tb) + len(tf); assert zo + len(z) < 0xBF8000
     rom[zo:zo + len(z)] = z; pz = int(next(l.split()[0] for l in syms.splitlines() if l.endswith('zone_ptr')), 16) - 0x08000000; struct.pack_into('<I', rom, pz, 0x08000000 + zo)
+    pc = int(next(l.split()[0] for l in syms.splitlines() if l.endswith('check_ptr')), 16) - 0x08000000; struct.pack_into('<I', rom, pc, check)
     return len(code)
 
 

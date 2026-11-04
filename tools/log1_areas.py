@@ -120,9 +120,8 @@ def build(r, log1, ids, story, named, actors):
         e = bytearray(tmpl); e[0], e[1], e[2], e[3] = WORLD, n + 1, 1, len(exits); struct.pack_into('<I', e, 4, len(objs))
         struct.pack_into('<I', e, 0x10, put(b''.join(exits)) if exits else 0); struct.pack_into('<I', e, 0x14, put(b''.join(struct.pack('<I', o) for o in objs)) if objs else 0)
         struct.pack_into('<I', e, 0x2C, put(struct.pack('<I', P))); entries.append(bytes(e))
-    struct.pack_into('<I', r, 0x79B704 + 4 * story.RUN_EVENT, named['quest_check'])
     cnt = COUNT + len(entries); tab = put(bytes(r[AREAS:AREAS + 56 * COUNT]) + b''.join(entries))
     struct.pack_into('<I', r, TABLE_LIT, tab); a_ = min(0xFF, cnt // 2)
     struct.pack_into('<4H', r, COUNT_INSN, 0x2000 | a_, 0x0040, 0x3000 | (cnt - 2 * a_), 0x4770)
     ent = lambda n: tab + 56 * (COUNT + addr[n])
-    return tab, [(f, ent(n), rec, idx) for f, n, rec, idx in spawns], [(f, ent(n), x1, y1, x2, y2) for f, n, x1, y1, x2, y2 in story.walks if n in idset], [(ent(n), f, x, y, rec) for n, f, x, y, rec in picks], [(ent(n), f, x, y, rec) for n, f, x, y, rec in foes_out], [(ent(n), max(0, x0), max(0, y0), max(0, x1), max(0, y1), d, m) for n, (x0, y0, x1, y1), d, m in story.zones if n in idset], skipped, moved
+    return tab, [(f, ent(n), rec, idx) for f, n, rec, idx in spawns], [(f, ent(n), x1, y1, x2, y2) for f, n, x1, y1, x2, y2 in story.walks if n in idset], [(ent(n), f, x, y, rec) for n, f, x, y, rec in picks], [(ent(n), f, x, y, rec) for n, f, x, y, rec in foes_out], [(ent(n), max(0, x0), max(0, y0), max(0, x1), max(0, y1), d, m) for n, (x0, y0, x1, y1), d, m in story.zones if n in idset], skipped, moved, named['quest_check']

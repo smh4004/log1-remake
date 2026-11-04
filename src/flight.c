@@ -128,6 +128,16 @@ static void live_hurt(void) {
     }
 }
 
+/* A story enemy's death script sets flag 893. This runs quest_check as an exit zone would (sub_080073F0): the script reads +0x10 and +0x14 of its zone object. */
+__attribute__((section(".text.table"))) volatile const u32 check_ptr = 0;
+#define PENDING 893
+static void live_pending(void) {
+    if (!PLAYER || !(FLAGS[PENDING >> 3] >> (PENDING & 7) & 1)) return;
+    FLAGS[PENDING >> 3] &= ~(1 << (PENDING & 7));
+    u32 zone[6] = {0, 0, 0, 0, 0, check_ptr};
+    ((fn2)0x080073F1)(zone, PLAYER);
+}
+
 static void live_walk(int new_area) {
     for (int i = 0; i < 16 && walk_table[i].flag; i++) {
         volatile const walk_t *w = &walk_table[i];
@@ -168,6 +178,7 @@ void flight_keys(u8 *st) {
     live_pick(fresh);
     live_foes(fresh);
     live_hurt();
+    live_pending();
     int r = (k & KEY_R) != 0, pressed = r && !STATE[0]; STATE[0] = r;
     if (!pressed || !PLAYER) return;
     if (STATE[1]) {

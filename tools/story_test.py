@@ -137,7 +137,11 @@ def fight(n, t, f):
     for i in range(300):
         if flag(f) or area() != n: return True
         if boss not in foes(): step(['2 A', '30']); continue
-        e = at(boss); p = pos(); dx, dy = e[0] - p[0], e[1] - p[1]; k = ('RIGHT' if dx > 0 else 'LEFT') if abs(dx) >= abs(dy) else ('DOWN' if dy > 0 else 'UP')
+        e = at(boss)
+        if i % 8 == 7:                                                  # routes aren't under test: reach a boss hovering over a wall
+            for ox, oy in ((-18, 0), (18, 0), (0, 12), (0, -12), (-30, 0), (30, 0), (0, 24), (0, -24)):
+                if fits(n, e[0] + ox, e[1] + oy): place(e[0] + ox, e[1] + oy); break
+        p = pos(); dx, dy = e[0] - p[0], e[1] - p[1]; k = ('RIGHT' if dx > 0 else 'LEFT') if abs(dx) >= abs(dy) else ('DOWN' if dy > 0 else 'UP')
         step(['%d %s' % (min(20, max(4, (abs(dx) + abs(dy)) // 2)), k)] if abs(dx) + abs(dy) > 26 else ['4 ' + k, '4 A', '10', '4 A', '10', '4 A', '14'])
         if pos() == p and abs(dx) + abs(dy) > 26: walk(('UP' if i % 2 else 'DOWN') if k in ('LEFT', 'RIGHT') else ('LEFT' if i % 2 else 'RIGHT'), 24)   # blocked: step around
     print('  fight timed out, boss at', at(boss), 'player', pos()); return False

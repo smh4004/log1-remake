@@ -10,7 +10,7 @@ from convert_log1 import chain, conversations, split_line  # noqa: E402
 import log1_pickups as P  # noqa: E402
 
 QF, TF, EF, TOK, NOOP = 420, 500, 620, 870, 895
-RUN_EVENT, EV = 498, 356   # global event repurposed for quest_check; one-shot event flags
+EV, PENDING = 356, 893   # one-shot event flags; a story enemy died, so the map-wide zone should run quest_check
 PF = 100                                               # area pickups: PF.. one flag each (Buu's Fury's own story, which used these, is gone)
 WORLD = 26
 SPEAKER = dict(goku='goku'); NAME = dict(roshi='Master Roshi', chichi='Chi-Chi', kingkai='King Kai', kingyema='King Yemma', korrin='Korin', popo='Mr. Popo', raditz='Raditz', nappa='Nappa')
@@ -30,7 +30,7 @@ _with_energy()
 
 
 class Story:
-    QF, TF, RUN_EVENT = QF, TF, RUN_EVENT
+    QF, TF = QF, TF
 
     def __init__(self, log1, last_quest, ids, portraits, scenes_json):
         self.sets = conversations(log1); self.names = [l.split()[1] for l in open(log1 + '/assets/areas/SPRITES.txt')]
@@ -245,7 +245,7 @@ class Story:
         import scenes
         ts = [t for x in self.q for t in x['tasks'] if t['type'] in ('activate', 'defeat') and t['sprite'] == sprite and t['area'] == n]
         if not ts: return None
-        return put(scenes.assemble('; '.join('call 29 %d' % (TF + t['id']) for t in ts) + '; call 216 %d 0 0' % RUN_EVENT, {}) + b'\x11')
+        return put(scenes.assemble('; '.join('call 29 %d' % (TF + t['id']) for t in ts) + '; call 29 %d' % PENDING, {}) + b'\x11')
 
     def zone_lists(self):
         """Walk-in zones: quest zones, artifact spots, LoG1's events, messages, heal zones, warp squares and warps only flying reaches."""
