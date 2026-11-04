@@ -105,6 +105,13 @@ def travel(to):
                         place(sx, sy); walk(k, 20); step(['80'])
                         if area() == v: ok = True; break
         if not ok: ok = fly_into(n, seen[v][1], lambda: area() == v); land()
+        if not ok:                                                      # static masks miss quest-opened ground, and a zone's scene can hold the warp back
+            for k, dx, dy in DIRS:
+                place((x0 + x1) // 2 - 8, (y0 + y1) // 2 - 4); walk(k, 12); step(['40'])
+                for i in range(14):
+                    if area() == v: ok = True; break
+                    step(['2 A', '30'])
+                if ok: break
         if not ok: print('  door failed', n, '->', v, seen[v][1]); return False
         step(['90'])                                                    # no free(): walking up here would go back through the door
 
