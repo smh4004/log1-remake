@@ -284,7 +284,7 @@ class Story:
             for t in x['tasks']:
                 i = t.get('id')
                 if t['type'] == 'enter_zone':
-                    self.doors[t['area']].append(dict(kind='walk', rect=(t['x1'], t['y1'], t['x2'], t['y2']), list='zone_t%d' % i))
+                    self.doors[t['area']].append(dict(kind='walk', rect=(t['x1'], t['y1'], t['x2'], t['y2'] + (16 if t['y2'] - t['y1'] < 16 else 0)), list='zone_t%d' % i))   # thin zones against a wall: BF's player stops short of LoG1's
                     self.out += ['list zone_t%d' % i, 'set_flag %d' % NOOP, 'if_flag %d zn%d' % (TF + i, i), 'set_flag %d' % (TF + i), 'run quest_check', 'label zn%d' % i, 'stop']
                 elif t['type'] == 'obstacle':                           # the spot takes the artifact of the same number
                     self.doors[t['area']].append(dict(kind='walk', rect=(t['x1'] - 8, t['y1'] - 8, t['x2'] + 8, t['y2'] + 8), list='obst_t%d' % i)); need = pick_item.get(t['param'])
