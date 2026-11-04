@@ -129,6 +129,7 @@ def fight(n, t, f):
         if boss not in foes(): step(['2 A', '30']); continue
         e = at(boss); p = pos(); dx, dy = e[0] - p[0], e[1] - p[1]; k = ('RIGHT' if dx > 0 else 'LEFT') if abs(dx) >= abs(dy) else ('DOWN' if dy > 0 else 'UP')
         step(['%d %s' % (min(20, max(4, (abs(dx) + abs(dy)) // 2)), k)] if abs(dx) + abs(dy) > 26 else ['4 ' + k, '4 A', '10', '4 A', '10', '4 A', '14'])
+        if pos() == p and abs(dx) + abs(dy) > 26: walk(('UP' if i % 2 else 'DOWN') if k in ('LEFT', 'RIGHT') else ('LEFT' if i % 2 else 'RIGHT'), 24)   # blocked: step around
     print('  fight timed out, boss at', at(boss), 'player', pos()); return False
 
 
