@@ -28,9 +28,14 @@ step() { echo; echo "=== $1"; }
 step "Getting the tools and decomps"
 git submodule update --init
 mkdir -p deps
-for r in buusfury-decomp log1-decomp log2-decomp; do
-    [ -d deps/$r/.git ] || { rm -rf deps/$r; git -c core.autocrlf=false clone --depth 1 https://github.com/smh4004/$r deps/$r; }
-done
+# Pinned to the commits the game was last tested on: a newer decomp can shift data and change the build.
+get() {
+    [ -d deps/$1/.git ] || { rm -rf deps/$1; git -c core.autocrlf=false init -q deps/$1; git -C deps/$1 remote add origin https://github.com/smh4004/$1; }
+    [ "$(git -C deps/$1 rev-parse -q --verify HEAD)" = "$2" ] || { git -C deps/$1 fetch -q --depth 1 origin $2; git -C deps/$1 checkout -q FETCH_HEAD; }
+}
+get buusfury-decomp 88daa637cde3dcded57ae7fca0b15a0f654ee4c0
+get log1-decomp c5169fe74012ea40092810e61f82c50831e15cac
+get log2-decomp 8cfa821da779e7e9488e8679bf0762f306cd0f4f
 step "Building Buu's Fury"
 cp "$BF" deps/buusfury-decomp/baserom.gba; (cd deps/buusfury-decomp && make -j4 && make compare && make extract)
 step "Building Legacy of Goku"
