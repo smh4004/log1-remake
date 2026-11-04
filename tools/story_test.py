@@ -184,6 +184,7 @@ def fight(n, t, f):
     if not L: print('  no enemy for', want); return bool(flag(f))
     x0, y0 = (a[0]['x'], a[0]['y']) if a else pos(); boss = min(L, key=lambda o: abs(at(o)[0] - x0) + abs(at(o)[1] - y0))
     for i in range(700):
+        if os.environ.get('TRACE') and i % 4 == 0: print('   f', i, status()['hp'], 'foes', len(foes()), 'boss', at(boss) if boss in foes() else None, 'me', pos(), flush=True)
         if flag(f) or area() != n: return True
         if boss not in foes(): step(['2 A', '30']); continue
         e = at(boss)
@@ -274,7 +275,9 @@ for attempt in range(3):                                                # numeri
                 if not ok: print('  FAILED', t['type'], {k: v for k, v in t.items() if k not in ('label', 'raw', 'type')})
             free(30)
             if not dead(): break
-            print('  GAME OVER in quest', n, ': reloading', flush=True); reload()
+            print('  GAME OVER in quest', n, ': reloading', flush=True)
+            if os.environ.get('TRACE'): run(['shot dead_q%d_%d' % (n, tries)])
+            reload()
         done = flag(QF + n)
         print('pass', attempt, 'quest', n, x.get('name'), 'done' if done else 'NOT DONE', [r[1] for r in res], 'area', area(), pos(), flush=True)
         if os.environ.get('NO_TOPUP'): print('   ', status(), flush=True)
