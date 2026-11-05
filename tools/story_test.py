@@ -91,6 +91,9 @@ def travel(to):
                 if v not in seen and (not f or flag(f)): seen[v] = (u, rect); todo.append(v)
         if to not in seen:
             if resumed and warp(to): continue
+            for _ in range(30):                                         # a scene or movie may still be on its way to warping the player there
+                step(['60'])
+                if area() == to: return True
             print('  no path', n, to); return False
         v = to
         while seen[v][0] != n: v = seen[v][0]
