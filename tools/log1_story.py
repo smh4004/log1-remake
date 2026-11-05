@@ -185,6 +185,7 @@ class Story:
                 for later in cmds[k + 1:]:
                     lb = bytes.fromhex(later['raw'])
                     if later['fn'] == '0800CB25' and lb[0] == who: x, y = struct.unpack_from('<HH', lb, 4); break
+                if nm == 'goku': continue                        # LoG1 places the player here; in this game the player is already on the map
                 if nm and area in self.areas and x and y:
                     flag = SPAWN_FLAG + 2 * len(self.scene_spawns); self.scene_spawns.append((area, flag, nm, x, y, flag + 1)); light(); r.append('do call 29 %d; call 136 10' % flag); self._scene_end = getattr(self, '_scene_end', []) + [flag + 1]; continue
             if f == '0800DF15':                                  # the closing text
