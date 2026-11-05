@@ -1,5 +1,5 @@
-/* Boot sequence from LoG1: legal screen, publisher and developer logos, then the intro movie. It runs once before Buu's Fury starts,
-   so it polls the display itself. Screens and movie are copied from your ROM at build time (tools/log1_start.py). */
+/* Boot sequence from LoG1: legal screen, publisher and developer logos, the intro movie with its song, then the title logo. It runs once
+   from Buu's Fury's main function, in place of its own logos, so it polls the display itself while the sound interrupts keep running. Screens and movie are copied from your ROM at build time (tools/log1_start.py). */
 typedef unsigned char u8; typedef unsigned short u16; typedef unsigned int u32; typedef signed char s8;
 #define DISPCNT (*(volatile u16 *)0x04000000)
 #define VCOUNT  (*(volatile u16 *)0x04000006)
@@ -14,7 +14,7 @@ typedef unsigned char u8; typedef unsigned short u16; typedef unsigned int u32; 
 #define KEYS    (*(volatile u16 *)0x04000130)
 #define PAL     ((volatile u16 *)0x05000000)
 #define VRAM    ((volatile u16 *)0x06000000)
-#define CANVAS  ((u8 *)0x02020000)
+#define CANVAS  ((u8 *)0x02010000)
 #define W 120
 #define H 80
 typedef struct { const u16 *pal; const u16 *pix; u32 hold; } screen_t;
@@ -98,13 +98,20 @@ static void movie(const u8 *f) {
     wait_release();
     for (int i = 0; i < W * H / 4; i++) z[i] = 0;
 }
+typedef void (*song_fn)(void *, const void *);
+static void song(const void *s) { ((song_fn)0x0803F111)(**(void ***)0x0800420C, s); }
 void log1_boot(void) {
     DISPCNT = 0x80; BG2PA = 0x100; BG2PB = 0; BG2PC = 0; BG2PD = 0x100; BG2X = 0; BG2Y = 0;
     BLDCNT = 0xC4; BLDY = 16; DISPCNT = 0x0404;
     for (const screen_t *p = screens; p->pal; p++) show(p);
     BG2PA = 0x80; BG2PD = 0x80;
     for (int y = 0; y < H; y++) { volatile u16 *v = VRAM + y * 120; for (int x = 0; x < W / 2; x++) v[x] = 0; }
+    song((const void *)MOVIE_SONG);
     movie((const u8 *)MOVIE);
-    DISPCNT = 0x80; BLDCNT = 0; BLDY = 0; BG2PA = 0x100; BG2PD = 0x100;
-    ((fn0)0x08046AED)();                                               /* Buu's Fury's start-up, which returns into its main function */
+    BG2PA = 0x100; BG2PD = 0x100; show((const screen_t *)SPLASH);
+    song((const void *)TITLE_SONG);
+    DISPCNT = 0x80; BLDCNT = 0; BLDY = 0;
+}
+__attribute__((naked)) void boot_entry(void) {
+    __asm__("bl log1_boot\n ldr r0, =0x080041DD\n bx r0\n .ltorg");    /* back into main, after its own logos */
 }

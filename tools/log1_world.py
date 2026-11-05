@@ -31,9 +31,27 @@ RECTS = {'west_city': (1193, 1137, 1312, 1296), 'east_district': (2632, 1465, 27
          'pilaf': (2249, 1521, 2360, 1624), 'nataday': (2161, 857, 2232, 928), 'sw_forest': (825, 1761, 904, 1840), 'fukurou': (721, 809, 864, 944)}
 
 
+# Banner names. LoG1 has no names of its own, so these are read off where each area sits in the story; rooms use the place they're in.
+AREA_NAMES = {0: "Roshi's Island", 1: 'Kame House', 2: "Goku's House", 3: 'Snake Way', 4: 'Forest', 5: 'Village', 6: 'Village', 7: 'Village', 8: 'Village', 9: 'Crash Site', 10: "Kami's Lookout",
+              11: 'Snake Way', 12: 'Other World', 13: "King Kai's Planet", 14: "King Kai's Planet", 15: "Kami's Lookout", 16: 'Wilderness', 17: 'City', 18: 'City', 19: 'City', 20: 'Capsule Corp', 21: 'City',
+              22: 'Military Base', 23: 'Battlegrounds', 24: 'Namek', 25: 'Namek', 26: 'Namek', 27: 'Namek', 28: 'Namek', 30: 'Namek', 31: 'Namek', 32: 'Namek', 33: 'Namek', 34: 'Frieza Base', 35: 'Frieza Base',
+              36: 'Frieza Base', 37: 'Frieza Base', 38: 'Frieza Base', 39: 'Frieza Base', 40: 'Namek', 41: 'Namek'}
+for _k in range(42, 54): AREA_NAMES[_k] = 'Namekian Temple'
+NAME_UI = {}
+for _n in sorted(set(AREA_NAMES.values())): NAME_UI[_n] = UI + len(PLACES) + len(NAME_UI)
+TITLE_START = 1                                                       # the title menu's first item
+
+
+def area_name(n):
+    """The banner's UI string for this area, or 0 for none (the story pictures)."""
+    return NAME_UI.get(AREA_NAMES.get(n), 0)
+
+
 def ui_text(path):
     with open(path, 'w', encoding='utf-8') as f:
+        f.write('[ui:%d]\n= Press Start\n\n' % TITLE_START)
         for i, (_, _, name) in enumerate(PLACES): f.write('[ui:%d]\n= %s\n\n' % (UI + i, name))
+        for name, i in NAME_UI.items(): f.write('[ui:%d]\n= %s\n\n' % (i, name))
 
 
 def landing_code(dests):

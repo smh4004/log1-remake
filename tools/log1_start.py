@@ -6,11 +6,11 @@ import os, struct, subprocess, tempfile
 from PIL import Image
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 B = 0x08000000
-LEGAL, INFOGRAMES, WEBFOOT, TITLE = 0x1C7B50, 0xFE4C, 0xFE58, 0x4DEDD8   # image headers {palette, pixels, flags} in LoG1
+LEGAL, INFOGRAMES, WEBFOOT, SPLASH, TITLE = 0x1C7B50, 0xFE4C, 0xFE58, 0x4DEDD8, 0x19BCDC   # image headers {palette, pixels, flags} in LoG1: the logo title, then the one behind Press Start
 MOVIE = 0x337248                                                       # the boot movie
-TITLE_SONG = 15                                                        # LoG1's song number for the title
+TITLE_SONG, MOVIE_SONG = 15, 17                                        # LoG1's song numbers
 BF_TITLE_TRACK, TRACK_BASE, TABLE_REF = 45, 53, 0x8F8
-CTORS_LIT, CTORS = 0x4911C, 0x08046AED
+MENU_X, MENU_Y = (0x524A, 0x5284), ((0x5256, 88), (0x5294, 102))        # the title menu's position, moved to where LoG1 has Press Start
 BF_TITLE_PICS, BF_TITLE_PAL = (0x5414, 0x1E744, 0x1E9E0), 0x5458         # the title and menu screens' picture pointers, and the title's palette, in Buu's Fury
 OVERLAY_RANGES = ((0x51E8, 0x5228), (0x1E4A0, 0x1E540), (0x1E774, 0x1E810))
 MENU = (1, 2, 6, 16, 24, 25, 28, 31, 62, 64, 65, 77, 78, 79, 80, 109, 110, 111, 113, 127)   # palette entries the title menu draws with, measured on Buu's Fury
@@ -65,15 +65,18 @@ def install(r, log1, L, menu):
     for head, hold in ((LEGAL, 150), (INFOGRAMES, 150), (WEBFOOT, 150)):
         p, x = image(log1, gfx, head); rows += struct.pack('<III', put(p), put(x), hold)
     rows += bytes(12); screens = put(bytes(rows))
+    p, x = image(log1, gfx, SPLASH); splash = put(struct.pack('<III', put(p), put(x), 180))
+    for o in MENU_X: r[o] = 75
+    for o, y in MENU_Y: r[o] = y
     size = struct.unpack_from('<I', log1, MOVIE)[0]; assert struct.unpack_from('<H', log1, MOVIE + 4)[0] == 0xAF11; movie = put(log1[MOVIE:MOVIE + size])
     # Boot code
     while len(r) % 4: r.append(0)
     at = len(r); d = tempfile.mkdtemp(); o, e, b = (os.path.join(d, n) for n in ('b.o', 'b.elf', 'b.bin'))
-    subprocess.check_call(['arm-none-eabi-gcc', '-mthumb', '-mcpu=arm7tdmi', '-Os', '-ffreestanding', '-nostdlib', '-DSCREENS=0x%X' % screens, '-DMOVIE=0x%X' % movie, '-c', os.path.join(ROOT, 'src', 'boot.c'), '-o', o])
-    subprocess.check_call(['arm-none-eabi-gcc', '-mthumb', '-mcpu=arm7tdmi', '-nostdlib', '-Wl,-Ttext=0x%X' % (B + at), '-Wl,-e,log1_boot', o, '-lgcc', '-o', e])
+    subprocess.check_call(['arm-none-eabi-gcc', '-mthumb', '-mcpu=arm7tdmi', '-Os', '-ffreestanding', '-nostdlib', '-DSCREENS=0x%X' % screens, '-DMOVIE=0x%X' % movie, '-DSPLASH=0x%X' % splash, '-DMOVIE_SONG=0x%X' % (B + table + 20 * (TRACK_BASE + MOVIE_SONG)), '-DTITLE_SONG=0x%X' % (B + table + 20 * BF_TITLE_TRACK), '-c', os.path.join(ROOT, 'src', 'boot.c'), '-o', o])
+    subprocess.check_call(['arm-none-eabi-gcc', '-mthumb', '-mcpu=arm7tdmi', '-nostdlib', '-Wl,-Ttext=0x%X' % (B + at), '-Wl,-e,boot_entry', o, '-lgcc', '-o', e])
     subprocess.check_call(['arm-none-eabi-objcopy', '-O', 'binary', '-j', '.text', e, b]); r.extend(open(b, 'rb').read())
-    entry = int(next(l.split()[0] for l in subprocess.check_output(['arm-none-eabi-nm', e]).decode().splitlines() if l.endswith('log1_boot')), 16)
-    assert struct.unpack_from('<I', r, CTORS_LIT)[0] == CTORS; struct.pack_into('<I', r, CTORS_LIT, entry | 1)
-    # Buu's Fury's own logos no longer run: their setup call and the wait on them, in main
-    nop(r, 0x41A6, 5); nop(r, 0x41D2, 5)
+    entry = int(next(l.split()[0] for l in subprocess.check_output(['arm-none-eabi-nm', e]).decode().splitlines() if l.endswith('boot_entry')), 16)
+    # main: skip Buu's Fury's first logo, and run this in place of the rest of them
+    nop(r, 0x41A6, 5)
+    struct.pack_into('<HHHI', r, 0x41D2, 0x4B01, 0x4718, 0x46C0, entry | 1)
     return len(pix), size

@@ -272,8 +272,23 @@ void flight_draw(int list) {
     for (int i = 0; i < 16; i++) d[i] = a[i];
 }
 
+/* Story pictures are areas of their own: the player and HUD are hidden there, and put back where they were afterwards. */
+#define PIC_SAVE 896
+#define PIC_BACK 897
+#define PIC_FIRST 55                                                   /* the first picture's area number */
+#define PX (*(volatile int *)0x03005F18)
+#define PY (*(volatile int *)0x03005F1C)
+#define DISPCNT (*(volatile u16 *)0x04000000)
+static void live_pictures(void) {
+    if (!PLAYER) return;
+    if (FLAGS[PIC_SAVE >> 3] >> (PIC_SAVE & 7) & 1) { FLAGS[PIC_SAVE >> 3] &= ~(1 << (PIC_SAVE & 7)); PX = *(int *)(PLAYER + 0x1A0); PY = *(int *)(PLAYER + 0x1A4); }
+    if (FLAGS[PIC_BACK >> 3] >> (PIC_BACK & 7) & 1) { FLAGS[PIC_BACK >> 3] &= ~(1 << (PIC_BACK & 7)); *(int *)(PLAYER + 0x1A0) = PX; *(int *)(PLAYER + 0x1A4) = PY; }
+    if (AREA && *(u8 *)AREA == 26 && *(u8 *)(AREA + 1) >= PIC_FIRST) DISPCNT &= ~0x1000;
+}
+
 void flight_keys(u8 *st) {
     ram_init();
+    live_pictures();
     u32 k = ~(u32)KEYS & 0xFFFF;
     ((fn2)0x0804023D)(st, k);
     if (!(~*(u16 *)(st + 2) & 0xF) && st[1] && (*(u16 *)(st + 4) & 0xF)) ((fn0)0x0803FA0D)();

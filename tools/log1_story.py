@@ -12,6 +12,7 @@ from log1_world import takeoff_lists as world_lists  # noqa: E402
 import log1_side  # noqa: E402
 
 QF, TF, EF, TOK, NOOP = 420, 500, 620, 870, 895
+PIC_SAVE, PIC_BACK, PIC_FIRST = 896, 897, 54                            # src/flight.c and log1_split: story pictures
 MUSIC_BASE = 53                                        # log1_music.BASE: LoG1's songs follow Buu's Fury's 53
 EV, PENDING = 720, 893   # one-shot event flags; a story enemy died, so the map-wide zone should run quest_check
 PF = 100                                               # area pickups: PF.. one flag each (Buu's Fury's own story, which used these, is gone)
@@ -139,11 +140,13 @@ class Story:
 
     def scene(self, i, area=None):
         """Plays a cutscene's conversations and its walks between characters on the map. Other commands (animation, effects, sound, camera) are counted, not played."""
-        r = []
+        r = []; pic = False
         for c in self.scenes[i]['commands']:
             b = bytes.fromhex(c['raw']); f = c['fn']
             if f == '0800CC61': r += self.say(chain(self.sets[b[0]], b[1])[0]); continue
-            if f == '0800CC75': r.append('do call 35 %d' % (MUSIC_BASE + b[0])); continue
+            if f == '0800CC75':                                  # a full-screen picture; the dialogue that follows draws over it
+                r.append('do ' + ('call 29 %d; call 136 2; ' % PIC_SAVE if not pic else '') + 'call 120 15; call 119 26 %d 1 8 8; call 121 15' % (PIC_FIRST + b[0] + 1)); pic = True; continue
+            if f == '0800E079': r.append('do call 35 %d' % (MUSIC_BASE + b[0])); continue
             if f == '0800DF15':                                  # the closing text
                 a_ = struct.unpack_from('<I', b)[0] & 0x1FFFFFF; r += ['narrate ' + p for p in split_line(self.rom[a_:self.rom.index(b'\0', a_)].decode('latin1').replace('{', '(').replace('}', ')').strip())]; continue
             if f == '0800CB25' or f == '0800D9C5':
@@ -158,6 +161,9 @@ class Story:
                     if nm == 'goku': r.append('do call 56; call 96 0 %d %d; call 58' % (x, y)); continue
                     self.move_names.add(nm); r.append('do call 56; call 96 %s %d %d; call 58' % (nm, x, y)); continue
             self.log['scene command skipped'] += 1
+        if pic:                                                  # back to the map, where the player was (src/flight.c)
+            sx, sy = self.areas[area]['start'] if area in self.areas else (8, 8)
+            r.append('do call 120 15; call 119 26 %d 1 %d %d; call 29 %d; call 136 2; call 121 15' % ((area if area is not None else 0) + 1, sx, sy, PIC_BACK))
         return r
 
     def actions(self, x):

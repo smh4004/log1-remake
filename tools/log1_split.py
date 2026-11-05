@@ -4,15 +4,42 @@ At 240x240 tiles it needs 120 map chunks across its layers, about 240 KB once lo
 becomes a smaller area of its own, cropped on a chunk boundary, with every coordinate shifted to match. This writes a copy of the
 exported data to out/converted/log1data, with symlinks to the unchanged files, so everything else reads it as plain LoG1 data with areas 42-53 in place of 29.
 """
-import json, os, re, shutil, xml.etree.ElementTree as ET
+import json, os, re, shutil, struct, xml.etree.ElementTree as ET
 import numpy as np
+from PIL import Image
 from scipy import ndimage as ni
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 AREA, FIRST, PAD = 29, 42, (15, 10)
 ALL = [n for n in range(42) if n != AREA]
 
 
-def ids(): return ALL + [FIRST + k for k in range(12)]
+PIC_FIRST, PICS, PIC_TABLE = 54, 15, 0x5C2198                          # LoG1's full-screen story pictures, each added as a one-screen area
+
+
+def ids(): return ALL + [FIRST + k for k in range(12)] + [PIC_FIRST + k for k in range(PICS)]
+
+
+def add_pictures(L, out):
+    """Each story picture becomes a 30x20 area with its own tiles, so Buu's Fury's dialogue draws over it as usual. Built from your ROM at build time."""
+    log1 = open(os.path.join(ROOT, 'rom', 'log1.gba'), 'rb').read(); B = ET.parse('%s/assets/maps/area07.tmx' % L); info = json.load(open('%s/assets/areas/area07.json' % L))
+    for k in range(PICS):
+        data = struct.unpack_from('<I', log1, PIC_TABLE + 12 * k + 4)[0]; im = Image.open('%s/assets/gfx/blocks/gUnknown_%08X.png' % (L, data)); assert im.mode == 'P' and im.size == (240, 160)
+        px = np.array(im, np.uint8); sheet = np.zeros((38 * 8, 128), np.uint8)
+        for i in range(600):
+            y, x = i // 30, i % 30; sheet[i // 16 * 8:i // 16 * 8 + 8, i % 16 * 8:i % 16 * 8 + 8] = px[y * 8:y * 8 + 8, x * 8:x * 8 + 8]
+        n = PIC_FIRST + k; s = Image.fromarray(sheet, 'P'); s.putpalette(im.getpalette()); s.save('%s/assets/maps/tiles/area%02d.png' % (out, n))
+        r2 = ET.fromstring(ET.tostring(B.getroot()))
+        for l in r2.findall('layer'):
+            nm = l.get('name'); v = [i + 1 for i in range(600)] if nm.startswith('bg3') else [1024] * 600 if nm in ('walkable', 'flyable', 'shots') else [0] * 600
+            l.find('data').text = ','.join(map(str, v))
+        for ts in r2.findall('tileset'):
+            for im_ in ts.findall('image'):
+                if 'area07' in im_.get('source'): im_.set('source', 'tiles/area%02d.png' % n); im_.set('height', str(38 * 8))
+            if ts.get('name') == 'area07': ts.set('name', 'area%02d' % n); ts.set('tilecount', '608')
+        for p in r2.iter('property'):
+            if p.get('name') == 'area': p.set('value', str(n))
+        ET.ElementTree(r2).write('%s/assets/maps/area%02d.tmx' % (out, n))
+        json.dump(dict(info, area=n, actors=[], pickups=[], objects=[], triggers=[], start=[8, 8], tile_anim=None), open('%s/assets/areas/area%02d.json' % (out, n), 'w'))
 
 
 def build(L):
@@ -81,5 +108,5 @@ def build(L):
                         c = section(t['x1'], t['y1']); a0, b0 = shift(c, t['x1'], t['y1']); a1, b1 = shift(c, t['x2'], t['y2']); t = dict(t, area=c, x1=a0, y1=b0, x2=a1, y2=b1)
                     else: raise ValueError(t)
                 L_[i_] = t
-    json.dump(q, open(out + '/assets/story/quests.json', 'w')); open(stamp, 'w').write('ok')
+    json.dump(q, open(out + '/assets/story/quests.json', 'w')); add_pictures(L, out); open(stamp, 'w').write('ok')
     return out
