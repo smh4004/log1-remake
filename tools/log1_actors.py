@@ -17,6 +17,7 @@ class Actors:
         self.st = len(r); r.extend(r[ST:ST + 150 * 28]); r.extend(bytes((ROWS - 150) * 28))
         for ref in ST_REFS:
             assert struct.unpack_from('<I', r, ref)[0] == BB + ST; struct.pack_into('<I', r, ref, BB + self.st)
+        self.pose_anims = {}
         self.r, self.log1 = r, log1_rom; self.names = [l.split()[1] for l in open(log1_dir + '/assets/areas/SPRITES.txt')]
         self.table = list(struct.unpack_from('<%dI' % COUNT, r, sprites.ACTOR_LIST)); self.at = at; self.ins = sprites.Inserter(r, at + 4 * 512); self.ids = {}; self.missing = []
         self.enemies = {e['name']: e for e in csv.DictReader(open(log1_dir + '/assets/tables/enemies.csv'))}; self.rows = {}; self.next_row = 60
@@ -36,6 +37,18 @@ class Actors:
         if not ok: self.missing.append(sprite)
         self.ids[key] = len(self.table) + 9; self.table.append(self.ins.put(bytes(R)))
         return self.ids[key]
+
+    def pose_rows(self, rows, idx_of):
+        """rows: (flag, actor sprite, sprite whose frame to show or None to let go, its row). -> rows for src/flight.c's pose table. The player's frames shrink the same way as big creatures."""
+        out = []
+        for flag, nm, src, row in rows:
+            A = 0
+            if src:
+                rec = S.record(self.log1, self.log1[S.SETS + self.names.index(src)]); m = S.colour_map(self.log1, rec, self.r)
+                A = self.pose_anims.setdefault((src, row), S.anim(self.ins, self.log1, rec, [row], m, want=2, fit=True))
+                if not A: self.missing.append('%s pose %d' % (src, row)); continue
+            out.append((flag, idx_of(nm), A))
+        return out
 
     def pickup(self, i):
         """An NPC actor showing LoG1 pickup i in every direction and frame."""

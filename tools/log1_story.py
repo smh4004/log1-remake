@@ -13,6 +13,8 @@ import log1_side  # noqa: E402
 
 QF, TF, EF, TOK, NOOP = 420, 500, 620, 870, 895
 PIC_SAVE, PIC_BACK, PIC_FIRST = 896, 897, 54                            # src/flight.c and log1_split: story pictures
+PAN = 30                                                                 # frames for a camera pan
+POSE_FLAG = 960                                                          # src/flight.c's pose table
 FLASH_FLAG, MOVIE_FLAG, SPAWN_FLAG = 898, 899, 901                       # src/flight.c: cutscene flash, the two movies, characters that appear mid-scene
 MOVIE_LISTS = {0x084E4F20: 0, 0x081CA144: 1}                             # LoG1's lists that play a movie -> src/flight.c's movie
 import log1_music  # noqa: E402
@@ -56,7 +58,7 @@ class Story:
             for k, p in enumerate(json.load(open('%s/assets/areas/area%02d.json' % (log1, n)))['pickups']): self.pickups[n].append(dict(p, flag=f, list='pk%d_%d' % (n, k))); f += 1
         assert f <= 340, 'pickup flags overflow'           # side content 340-365; Buu's Fury's world map uses 398-408
         self.areas = {n: json.load(open('%s/assets/areas/area%02d.json' % (log1, n))) for n in ids}; self.labels = dict(l.rstrip('\n').split('\t', 1) for l in open(log1 + '/assets/text/strings.txt', encoding='latin1') if '\t' in l)
-        self.forms = {}; self.zones = []; self.move_names = set(); self.placed = self.placed_items()
+        self.forms = {}; self.zones = []; self.move_names = set(); self.pose_rows = []; self.pose_flags = {}; self.placed = self.placed_items()
         self.side = log1_side.Side(self); self.side.add_pickups()
         self.hostile_all = {(a['area'], a['sprite']) for x in self.q for a in x['actions'] if a['type'] == 'make_hostile'}
         for n, a in self.areas.items(): self.area_sets |= {t['arg'] for t in a['triggers'] if t['kind'] == 'event'}
@@ -122,7 +124,7 @@ class Story:
     def say(self, body):
         r = []
         for l in body:
-            who = 'goku' if l['who'] == 'goku' else ('#%d' % self.por[l['who']] if l['who'] in self.por else None)
+            who = 'goku' if l['who'] in ('goku', 'ssgoku', 'gokumallet') else ('#%d' % self.por[l['who']] if l['who'] in self.por else None)   # Goku's forms speak with his face
             pre = '' if who else NAME.get(l['who'], l['who'].rstrip('0123456789').title()) + ': '
             r += ['say %s %s' % (who or 'narrator', p) for p in split_line(pre + l['text'].replace('{', '(').replace('}', ')').strip())]
         return r
@@ -142,8 +144,21 @@ class Story:
         return next((a for a in self.areas[area]['actors'] if a['kind'] != 2 and a['sprite'] == name and a['show'] == 0), None)
 
     def scene(self, i, area=None):
-        """Plays a cutscene: dialogue, walks, pictures, movies, music, sound effects, fades, flashes and characters appearing. Special animations and sprite swaps are counted, not played."""
+        """Plays a cutscene: dialogue, walks, pictures, movies, music, sound effects, fades, flashes and characters appearing. Poses and sprite swaps go through src/flight.c's pose table."""
         r = []; pic = dark = False; cmds = self.scenes[i]['commands']; appeared = set()
+        panned = False; cam = [None]; where = {}; posed = {}; alias = {}                                    # actors currently holding a pose -> keep it through walks?; LoG1 sprite swapped in -> the actor on the map
+        def actor_of(who):
+            who = alias.get(who, who); nm = self.names[who] if who < len(self.names) else None
+            return nm if nm and (nm == 'goku' or who in appeared or self.movable(area, who)) else None
+        def pose(who, src, row, keep=False):
+            """Shows LoG1 frame `row` of sprite `src` on an actor. Row 0 of its own sprite is its usual standing frame, so that just lets go of any pose."""
+            nm = actor_of(who)
+            if nm is None: return False
+            if src == nm and row == 0: unpose(nm, True); return True
+            r.append('do call 29 %d; call 136 2' % self.pose_flag(nm, src, row)); posed[nm] = keep
+            return True
+        def unpose(nm, swaps=False):
+            if nm in posed and (swaps or not posed[nm]): r.append('do call 29 %d; call 136 2' % self.pose_flag(nm, None, 0)); del posed[nm]
         if area is None: area = self.home_area(i)
         def back():
             sx, sy = self.areas[area]['start'] if area in self.areas else (8, 8)
@@ -162,7 +177,9 @@ class Story:
                 if nxt != '0800CC61': r.append('do call 136 150')
                 continue
             if f == '0800E065':                                  # back to the map
-                if pic: r.append(back()); pic = False
+                if pic:
+                    r.append(back()); pic = False
+                    if cam[0]: r.append(cam[0])                        # the map reloaded, so the camera is back on Goku
                 continue
             if f == '0800CA69':                                  # a movie, then whatever comes next as a backdrop for its closing text
                 m = MOVIE_LISTS[struct.unpack_from('<I', b)[0]]; nx = next((x for x in cmds[k + 1:] if x['fn'] == '0800CC75'), None)
@@ -176,7 +193,28 @@ class Story:
                 if not dark: r.append('do call 120 64'); dark = True
                 continue
             if f == '0800CDAF': r.append('do call 29 %d; call 136 30' % FLASH_FLAG); continue    # a white flash
-            if f == '0800CC03': r.append('do call 136 20'); continue                            # LoG1 pans the camera here
+            if f == '0800CC03':                                  # the camera pans to a character, or where they're about to appear
+                who = alias.get(b[0], b[0]); nm = actor_of(who); light(); m_ = self.movable(area, who) if nm != 'goku' else None
+                spot = where.get(who) or (m_ and m_.get('x') is not None and (m_['x'], m_['y'])) or next((struct.unpack_from('<HH', bytes.fromhex(l['raw']), 0) for l in cmds[k + 1:] if l['fn'] == '0800CAC9' and struct.unpack_from('<H', bytes.fromhex(l['raw']), 4)[0] == who), None)
+                if nm == 'goku': cam[0] = 'do call 49 0 %d' % PAN
+                elif spot and area in self.areas: cam[0] = 'do call 50 %d %d %d' % (max(0, spot[0] - 120), max(0, spot[1] - 80), PAN)   # by position: a character who isn't on the map would crash the actor pan
+                else: r.append('do call 136 20'); continue
+                r.append(cam[0]); panned = True; continue
+            if f in ('0800CA75', '0800DC49') and len(b) >= 2:    # an animation frame; CA75 waits for it
+                who = alias.get(b[0], b[0]); nm = self.names[who] if who < len(self.names) else None
+                if nm:
+                    light(); kept = pose(who, self.names[b[0]], b[1], who != b[0])
+                    if not kept: self.log['scene pose on someone not on the map'] += 1
+                    elif f == '0800CA75': r.append('do call 136 30')
+                continue
+            if f == '0800DC0D':                                  # a sprite swap: Vegeta to his Great Ape and back
+                who = alias.get(b[0], b[0]); home = who == b[1]; alias.pop(b[0], None)
+                if not home: alias[b[1]] = who
+                light(); pose(who, self.names[b[1]], 0, not home); continue
+            if f == '0800DC8B':                                  # turn to a direction
+                nm = actor_of(b[0])
+                if nm: light(); self.move_names.add(nm) if nm != 'goku' else None; r.append('do call 83 %s %d; call 136 8' % ('0' if nm == 'goku' else nm, b[1]))
+                continue
             if f in ('0800CAC9', '0800CDF5'):                    # a character appears, standing where their first walk would take them
                 who = struct.unpack_from('<H', b, 4)[0]; x, y = struct.unpack_from('<HH', b, 0); nm = self.names[who] if who < len(self.names) else None
                 if f == '0800CDF5':
@@ -187,7 +225,7 @@ class Story:
                     if later['fn'] == '0800CB25' and lb[0] == who: x, y = struct.unpack_from('<HH', lb, 4); break
                 if nm == 'goku' or self.movable(area, who): continue    # already on the map: walking it to where a copy stands would never finish
                 if nm and area in self.areas and x and y:
-                    appeared.add(who); flag = SPAWN_FLAG + 2 * len(self.scene_spawns); self.scene_spawns.append((area, flag, nm, x, y, flag + 1)); light(); r.append('do call 29 %d; call 136 10' % flag); self._scene_end = getattr(self, '_scene_end', []) + [flag + 1]; continue
+                    appeared.add(who); where[who] = (x, y); flag = SPAWN_FLAG + 2 * len(self.scene_spawns); self.scene_spawns.append((area, flag, nm, x, y, flag + 1)); light(); r.append('do call 29 %d; call 136 10' % flag); self._scene_end = getattr(self, '_scene_end', []) + [flag + 1]; continue
             if f == '0800DF15':                                  # the closing text
                 a_ = struct.unpack_from('<I', b)[0] & 0x1FFFFFF; r += ['narrate ' + p for p in split_line(self.rom[a_:self.rom.index(b'\0', a_)].decode('latin1').replace('{', '(').replace('}', ')').strip())]; continue
             if f == '0800CB25' or f == '0800D9C5':
@@ -198,15 +236,25 @@ class Story:
                     if not o or o['x'] is None: a = None                # no fixed spot to walk to
                     else: x, y = o['x'] + struct.unpack_from('<h', b, 4)[0], o['y'] + struct.unpack_from('<h', b, 6)[0]
                 if a:
-                    light(); nm = self.names[b[0]]
+                    light(); nm = self.names[b[0]]; where[b[0]] = (x, y)
+                    unpose(nm)
                     if nm == 'goku': r.append('do call 56; call 96 0 %d %d; call 58' % (x, y)); continue
                     self.move_names.add(nm); r.append('do call 56; call 96 %s %d %d; call 58' % (nm, x, y)); continue
             self.log['scene command skipped'] += 1
         if pic: r.append(back())
         elif dark: r.append('do call 121 15')
+        for nm in list(posed): unpose(nm, True)
+        if panned: r.append('do call 49 0 %d; call 51 0' % PAN)
         for fl in getattr(self, '_scene_end', []): r.append('do call 29 %d' % fl)
         self._scene_end = []
         return r
+
+    def pose_flag(self, actor, src, row):
+        """The flag that makes src/flight.c hold this pose on an actor, or let go when src is None."""
+        k = (actor, src, row)
+        if k not in self.pose_flags:
+            self.pose_flags[k] = POSE_FLAG + len(self.pose_flags); assert self.pose_flags[k] < 1024; self.pose_rows.append((self.pose_flags[k], actor, src, row))
+        return self.pose_flags[k]
 
     def home_area(self, i):
         """The area a scene with no task area plays in: where its first character stands."""
@@ -345,6 +393,12 @@ class Story:
             if not spot: spot = next(((t['x'] - 20, t['y']) for t in a['actors']), (64, 64))
             r += ['list dbg_%d' % n, 'set_flag %d' % NOOP] + self.warp(n, *spot) + ['stop']
             if self.bal: r += ['list dbgx_%d' % n, 'set_flag %d' % NOOP, 'do call 194 %d' % self.bal.exp[self.bal_level(n) + 1], 'stop']
+        if os.environ.get('SCENE_TEST'):                                     # test builds only: each cutscene as a list of its own
+            for k,c in enumerate(['call 136 30','call 60 0 0','call 60 0 32','call 56; call 60 0 32; call 58','call 81 0 32 30','call 56; call 81 0 32 30; call 58','call 56; call 96 0 300 256; call 58','call 83 0 2']): r += ['list dbgscene_t%d'%k,'set_flag %d'%NOOP,'do '+c,'set_flag %d'%(860+k),'stop']
+            for x in self.q:
+                area = next((t['area'] for t in x['tasks'] if t.get('area', 255) != 255), None)
+                for a in x['actions']:
+                    if a['type'] == 'scene': r += ['list dbgscene_%d' % a['index'], 'set_flag %d' % NOOP] + self.scene(a['index'], area) + ['stop']
         return r
 
     def zone_lists(self):

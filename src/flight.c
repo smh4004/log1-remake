@@ -255,7 +255,9 @@ typedef struct { u16 flag; u8 x, y; } mark_t;
 #define OAM ((volatile u16 *)0x03003498)
 #define MARK_TILE 100                       /* the map allocates OBJ tiles down from the top of VRAM, so low tiles stay free */
 #define MARK_FIRST 118
+static void pose_apply(void);
 void flight_draw(int list) {
+    pose_apply();
     int map = AREA && *(u8 *)AREA == 0 && *(u8 *)(AREA + 1) == 50;
     if (map) {
         int e = MARK_FIRST;
@@ -309,6 +311,29 @@ static void live_save(u32 k) {
     u32 zone[6] = {0, 0, 0, 0, 0, saved_ptr}; ZBUSY = 1; ((fn2)0x080073F1)(zone, PLAYER); ZBUSY = 0;
 }
 
+/* Cutscene poses and sprite swaps: a flag from the script picks a table row {flag, actor, frames}. The actor's animation is held on those frames, set right before
+ * it's drawn, until a row with no frames (or the area changes) lets it go. Buu's Fury's own animation natives pick by what the actor is doing, not by frames, so they can't show these. */
+__attribute__((section(".text.table"))) volatile const u32 pose_ptr = 0;
+typedef struct { u16 flag, actor; u32 anim; } pose_t;
+typedef struct { u32 obj, anim; } held_t;
+#define HELD ((held_t *)0x03005F40)
+#define HELD_N 4
+static void pose_apply(void) { for (int i = 0; i < HELD_N; i++) if (HELD[i].obj) { *(u32 *)(HELD[i].obj + 0x50) = HELD[i].anim; *(u8 *)(HELD[i].obj + 0x11) = 0; } }
+static void live_pose(int fresh) {
+    if (fresh) for (int i = 0; i < HELD_N; i++) HELD[i].obj = 0;
+    for (const pose_t *p = (const pose_t *)pose_ptr; p && p->flag; p++) {
+        if (!(FLAGS[p->flag >> 3] >> (p->flag & 7) & 1)) continue;
+        FLAGS[p->flag >> 3] &= ~(1 << (p->flag & 7));
+        u32 o = ((u32 (*)(int))0x080001C7)(p->actor), slot = HELD_N;
+        if (!o) continue;
+        for (int i = HELD_N - 1; i >= 0; i--) if (!HELD[i].obj || HELD[i].obj == o) { slot = i; if (HELD[i].obj == o) break; }
+        if (slot == HELD_N) continue;
+        if (p->anim) { HELD[slot].obj = o; HELD[slot].anim = p->anim; }
+        else if (HELD[slot].obj == o) { HELD[slot].obj = 0; ((void (*)(u32, int))0x0800ECDB)(o, 0); }
+    }
+    pose_apply();
+}
+
 void flight_keys(u8 *st) {
     ram_init();
     live_pictures();
@@ -328,6 +353,7 @@ void flight_keys(u8 *st) {
     live_follow(fresh);
     if (DEBUG_LIST && PLAYER) { u32 zone[6] = {0, 0, 0, 0, 0, DEBUG_LIST}; DEBUG_LIST = 0; ((fn2)0x080073F1)(zone, PLAYER); }
     live_world(k, fresh);
+    live_pose(fresh);
     int r = (k & KEY_R) != 0, pressed = r && !STATE[0]; STATE[0] = r;
     if (!pressed || !PLAYER || !AREA || *(u8 *)AREA != WORLD_ID) return;
     if (STATE[1]) {
