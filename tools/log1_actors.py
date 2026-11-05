@@ -4,9 +4,11 @@ New actors are appended as Gero's sprites.build_actors does. Stats rows reuse Bu
 HP and EXP scaling is a placeholder until balancing (M8).
 """
 import csv, os, struct, sys
+import numpy as np
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path[:0] = [os.path.join(ROOT, 'tools'), os.path.join(ROOT, 'vendor', 'gero-tools', 'tools')]
 import log1_sprites as S, sprites  # noqa: E402
+BIG = ('oozaru1', 'oozaru2')                                            # taller than an actor's frame; src/flight.c draws them
 ROWS, ST_REFS = 256, (0xFCE4, 0xFD70, 0x1BA90, 0x24F28, 0x279DC, 0x2CD18, 0x2F5E4, 0x32D3C, 0x335B8, 0x39BD4, 0x39D90, 0x3A384, 0x3A698)
 BB = 0x08000000; ST = 0x711274; T_NPC, T_ENEMY = 152, 25; COUNT = 298
 
@@ -42,13 +44,26 @@ class Actors:
         """rows: (flag, actor sprite, sprite whose frame to show or None to let go, its row). -> rows for src/flight.c's pose table. The player's frames shrink the same way as big creatures."""
         out = []
         for flag, nm, src, row in rows:
-            A = 0
+            A = big = 0
             if src:
                 rec = S.record(self.log1, self.log1[S.SETS + self.names.index(src)]); m = S.colour_map(self.log1, rec, self.r)
-                A = self.pose_anims.setdefault((src, row), S.anim(self.ins, self.log1, rec, [row], m, want=2, fit=True))
+                if src in BIG:
+                    if (src, row) not in self.pose_anims: self.pose_anims[(src, row)] = self.big_frames(rec, row, m)
+                    big = self.pose_anims[(src, row)]; A = self.pose_anims.setdefault('blank', self.ins.anim([[np.zeros((32, 32), np.uint8)] * 2] * 3))
+                else: A = self.pose_anims.setdefault((src, row), S.anim(self.ins, self.log1, rec, [row], m, want=2, fit=True))
                 if not A: self.missing.append('%s pose %d' % (src, row)); continue
-            out.append((flag, idx_of(nm), A))
+            out.append((flag, idx_of(nm), A, big))
         return out
+
+    def big_frames(self, rec, row, cmap):
+        """A 32x64 8bpp sprite's tiles for each of Buu's Fury's directions: down, up, side, side mirrored."""
+        def col(c):
+            p = S.u32(self.log1, (S.u32(self.log1, rec + 0x28) & S.MASK) + 4 * (row * 4 + c)) & S.MASK; _, _, w, h = struct.unpack_from('<hhHH', self.log1, p); gfx = S.u32(self.log1, p + 12) & S.MASK
+            assert (w, h) == (32, 64); raw = np.frombuffer(self.log1, np.uint8, w * h // 2, gfx); px = np.empty(w * h, np.uint8); px[0::2] = raw & 15; px[1::2] = raw >> 4; im = np.zeros((h, w), np.uint8)
+            for k in range(w * h // 64): im[(k // 4) * 8:(k // 4) * 8 + 8, (k % 4) * 8:(k % 4) * 8 + 8] = px[k * 64:k * 64 + 64].reshape(8, 8)
+            return cmap[im]
+        d, u, s = col(0), col(1), col(2)
+        return self.ins.put(b''.join(im[y:y + 8, x:x + 8].tobytes() for im in (d, u, s, s[:, ::-1]) for y in range(0, 64, 8) for x in range(0, 32, 8)))
 
     def pickup(self, i):
         """An NPC actor showing LoG1 pickup i in every direction and frame."""

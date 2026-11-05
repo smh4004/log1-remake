@@ -256,8 +256,10 @@ typedef struct { u16 flag; u8 x, y; } mark_t;
 #define MARK_TILE 100                       /* the map allocates OBJ tiles down from the top of VRAM, so low tiles stay free */
 #define MARK_FIRST 118
 static void pose_apply(void);
+static void big_draw(void);
 void flight_draw(int list) {
     pose_apply();
+    big_draw();
     int map = AREA && *(u8 *)AREA == 0 && *(u8 *)(AREA + 1) == 50;
     if (map) {
         int e = MARK_FIRST;
@@ -311,16 +313,31 @@ static void live_save(u32 k) {
     u32 zone[6] = {0, 0, 0, 0, 0, saved_ptr}; ZBUSY = 1; ((fn2)0x080073F1)(zone, PLAYER); ZBUSY = 0;
 }
 
+/* A Great Ape is taller than an actor's one 32x32 piece, so its actor goes invisible and this draws it as a 32x64 sprite of its own, in the low OBJ tiles that actors don't reach. */
+#define BIG_OBJ (*(volatile u32 *)0x03005F60)
+#define BIG_DATA (*(volatile u32 *)0x03005F64)
+#define BIG_SHOWN (*(volatile u32 *)0x03005F68)     /* the frames now in VRAM */
+#define CAM_X (*(volatile int *)0x030019A4)
+#define CAM_Y (*(volatile int *)0x030019A8)
+static void big_draw(void) {
+    if (!BIG_OBJ) { if (BIG_SHOWN) { BIG_SHOWN = 0; OAM[127 * 4] = 0x200; } return; }
+    u32 o = BIG_OBJ, src = BIG_DATA + (*(u8 *)(o + 0x10) & 3) * 2048;
+    if (BIG_SHOWN != src) { for (int i = 0; i < 512; i++) ((volatile u32 *)0x06010000)[i] = ((const u32 *)src)[i]; BIG_SHOWN = src; }
+    int x = (*(int *)(o + 0x1A0) >> 8) - 8 - (CAM_X >> 10), y = (*(int *)(o + 0x1A4) >> 8) - 56 - (CAM_Y >> 10);
+    if (x <= -32 || x >= 240 || y <= -64 || y >= 160) { OAM[127 * 4] = 0x200; return; }
+    OAM[127 * 4] = (y & 255) | 0x2000 | 0x8000; OAM[127 * 4 + 1] = (x & 511) | 0xC000; OAM[127 * 4 + 2] = 0xC00;
+}
+
 /* Cutscene poses and sprite swaps: a flag from the script picks a table row {flag, actor, frames}. The actor's animation is held on those frames, set right before
  * it's drawn, until a row with no frames (or the area changes) lets it go. Buu's Fury's own animation natives pick by what the actor is doing, not by frames, so they can't show these. */
 __attribute__((section(".text.table"))) volatile const u32 pose_ptr = 0;
-typedef struct { u16 flag, actor; u32 anim; } pose_t;
+typedef struct { u16 flag, actor; u32 anim, big; } pose_t;
 typedef struct { u32 obj, anim; } held_t;
 #define HELD ((held_t *)0x03005F40)
 #define HELD_N 4
 static void pose_apply(void) { for (int i = 0; i < HELD_N; i++) if (HELD[i].obj) { *(u32 *)(HELD[i].obj + 0x50) = HELD[i].anim; *(u8 *)(HELD[i].obj + 0x11) = 0; } }
 static void live_pose(int fresh) {
-    if (fresh) for (int i = 0; i < HELD_N; i++) HELD[i].obj = 0;
+    if (fresh) { for (int i = 0; i < HELD_N; i++) HELD[i].obj = 0; BIG_OBJ = 0; }
     for (const pose_t *p = (const pose_t *)pose_ptr; p && p->flag; p++) {
         if (!(FLAGS[p->flag >> 3] >> (p->flag & 7) & 1)) continue;
         FLAGS[p->flag >> 3] &= ~(1 << (p->flag & 7));
@@ -328,6 +345,7 @@ static void live_pose(int fresh) {
         if (!o) continue;
         for (int i = HELD_N - 1; i >= 0; i--) if (!HELD[i].obj || HELD[i].obj == o) { slot = i; if (HELD[i].obj == o) break; }
         if (slot == HELD_N) continue;
+        if (p->big) { BIG_OBJ = o; BIG_DATA = p->big; } else if (BIG_OBJ == o) BIG_OBJ = 0;
         if (p->anim) { HELD[slot].obj = o; HELD[slot].anim = p->anim; }
         else if (HELD[slot].obj == o) { HELD[slot].obj = 0; ((void (*)(u32, int))0x0800ECDB)(o, 0); }
     }

@@ -25,6 +25,13 @@ def image(log1, gfx, header):
     return log1[pal - B:pal - B + 512], im.tobytes()
 
 
+def identity(r):
+    """A game of its own: emulators pick a save file by the header's title and code, and Buu's Fury or any hack of it would otherwise share saves with this game.
+    Slots of any other game then fail their checksum, whose start value changes here, and show as New Game, so their data is never read as this game's."""
+    assert r[0x3FC5A:0x3FC5C] == b'\x01\x24'; r[0x3FC5A] = 0x4C
+    r[0xA0:0xAC] = b'LEGACYGOKU1R'; r[0xAC:0xB0] = b'ZLG1'; r[0xBD] = (-sum(r[0xA0:0xBD]) - 0x19) & 0xFF
+
+
 def nop(r, off, halves):
     for i in range(halves): struct.pack_into('<H', r, off + 2 * i, 0x46C0)
 
