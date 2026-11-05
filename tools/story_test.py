@@ -270,8 +270,10 @@ else:
     for q in range(first): setf(QF + q)
     step(['2']); ckpt(-1)
 print('start area', area(), pos())
+XP = [0]
 def dead():
-    """A real game over stays gone. Cutscenes and story pictures reload the area, which clears the player for a moment."""
+    """A real game over stays gone, or the bot's own A presses start a new game from its menu, which wipes EXP. Cutscenes and story pictures reload the area, which clears the player for a moment."""
+    if player() != 0 and area() >= 0 and status()['xp'] < XP[0]: return True
     for _ in range(4):
         if area() >= 0 and player() != 0: return False
         step(['60'])                                                  # no buttons: A on a game over screen would start a new game
@@ -295,7 +297,7 @@ for attempt in range(4):                                                # numeri
         done = flag(QF + n)
         print('pass', attempt, 'quest', n, x.get('name'), 'done' if done else 'NOT DONE', [r[1] for r in res], 'area', area(), pos(), flush=True)
         if os.environ.get('NO_TOPUP'): print('   ', status(), flush=True)
-        if done: ckpt(n)
+        if done: ckpt(n); XP[0] = status()['xp']
         else: bad.append(x)
     todo = bad
     if not todo: break
