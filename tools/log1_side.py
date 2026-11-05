@@ -61,7 +61,7 @@ AFTER_ELITES = QF + 52
 ELDER_PAID = 382
 ELDER = dict(area=24, sprite='oldman', at=(300, 500), after=QF + 53)
 RM_KILLED, RM_PAID, RM_OPEN = 383, 387, 391
-ANNOUNCER = dict(area=0, sprite='wiseman', at=(325, 225), after=QF + 68)
+ANNOUNCER = dict(area=0, sprite='wiseman', at=(292, 186), after=QF + 68)
 REMATCHES = [dict(sprite='raditz', at=(380, 200), name='Raditz', extra=0, line="Raditz: I came back to apologise. No, wait. To fight. It was to fight."),
              dict(sprite='nappa', at=(380, 200), name='Nappa', extra=3, line="Nappa: Vegeta says I have to do this before I can have dessert."),
              dict(sprite='vegeta2', at=(380, 200), name='Vegeta', extra=6, line="Vegeta: This changes nothing, Kakarot. I'm only here for the exercise."),
