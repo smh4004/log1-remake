@@ -5,7 +5,7 @@ ENTRY, CODE, DRAW = 0x3D4A0, 0xBF0000, 0x1157E
 EXTRA = []                                                             # -D flags from log1_start: addresses in the boot code and movies
 
 
-def install(rom, spawns=(), walks=(), picks=(), foes=(), zones=(), check=0, follows=(), fly=(), art=b'', marks=(), walkins=(), saved=0, poses=()):
+def install(rom, spawns=(), walks=(), picks=(), foes=(), zones=(), check=0, follows=(), fly=(), art=b'', marks=(), walkins=(), saved=0, poses=(), opening=0):
     """spawns: up to 32 (flag, area entry bus address, record bus address, NPC index to remove or 0) rows for live_spawn."""
     assert len(spawns) <= 256 and len(walks) <= 16
     d = tempfile.mkdtemp(); o, e, b = (os.path.join(d, n) for n in ('f.o', 'f.elf', 'f.bin'))
@@ -32,6 +32,7 @@ def install(rom, spawns=(), walks=(), picks=(), foes=(), zones=(), check=0, foll
         rom[at:at + len(data)] = data; struct.pack_into('<I', rom, int(next(l.split()[0] for l in syms.splitlines() if l.endswith(sym)), 16) - 0x08000000, 0x08000000 + at); return at + len(data)
     e_ = table('spawn_ptr', zo + len(z), b''.join(struct.pack('<5I', *row) for row in spawns) + bytes(20)); e_ = table('follow_ptr', e_, b''.join(struct.pack('<3I', *row) for row in follows) + bytes(12)); e_ = table('fly_ptr', e_, b''.join(struct.pack('<2I', *row) for row in fly) + bytes(8)); e_ = table('walkin_ptr', e_, b''.join(struct.pack('<I4HI', *w) for w in walkins) + bytes(16)); e_ = table('mark_ptr', e_, b''.join(struct.pack('<HBB', *m) for m in marks) + bytes(4)); e_ = (e_ + 3) & ~3; e_ = table('art_ptr', e_, art); assert e_ < 0xBF8000
     e_ = table('pose_ptr', e_ if e_ % 4 == 0 else e_ + 4 - e_ % 4, b''.join(struct.pack('<HHII', *row) for row in poses) + bytes(12))
+    po = int(next(l.split()[0] for l in syms.splitlines() if l.endswith('opening_ptr')), 16) - 0x08000000; struct.pack_into('<I', rom, po, opening)
     ps = int(next(l.split()[0] for l in syms.splitlines() if l.endswith('saved_ptr')), 16) - 0x08000000; struct.pack_into('<I', rom, ps, saved)
     pc = int(next(l.split()[0] for l in syms.splitlines() if l.endswith('check_ptr')), 16) - 0x08000000; struct.pack_into('<I', rom, pc, check)
     draw = int(next(l.split()[0] for l in syms.splitlines() if l.endswith('flight_draw')), 16)

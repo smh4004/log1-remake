@@ -25,6 +25,9 @@ def image(log1, gfx, header):
     return log1[pal - B:pal - B + 512], im.tobytes()
 
 
+STORY_FONT, STORY_TEXT, T_LAST = 0x15B2F0, 0x5C2E1A, 104                # LoG1's font record (palette, tiles) and opening text
+
+
 def identity(r):
     """A game of its own: emulators pick a save file by the header's title and code, and Buu's Fury or any hack of it would otherwise share saves with this game.
     Slots of any other game then fail their checksum, whose start value changes here, and show as New Game, so their data is never read as this game's."""
@@ -48,6 +51,7 @@ def title_picture(palette, pixels, bf_palette, menu):
 
 
 def install(r, log1, L, menu):
+    import bios, log1_music                                            # bios: log1-decomp's tools/assets, on the path from slice_build
     gfx = os.path.join(L, 'assets', 'gfx')
 
     def put(b):
@@ -81,15 +85,20 @@ def install(r, log1, L, menu):
     for o, y in MENU_Y: r[o] = y
     size = struct.unpack_from('<I', log1, MOVIE)[0]; assert struct.unpack_from('<H', log1, MOVIE + 4)[0] == 0xAF11; movie = put(log1[MOVIE:MOVIE + size])
     mv = [put(log1[o:o + struct.unpack_from('<I', log1, o)[0]]) for o in STORY_MOVIES]
+    # The opening after New Game: LoG1's story text, font and palette
+    f = struct.unpack_from('<II', log1, STORY_FONT); assert f[1] - B == STORY_FONT + 12
+    font = bios.unpack(log1, f[1] - B)[0]; assert len(font) >= (T_LAST + 1) * 32
+    e_ = log1.index(b'\0', STORY_TEXT); story = [put(font[:(T_LAST + 1) * 32]), put(log1[f[0] - B:f[0] - B + 32]), put(log1[STORY_TEXT:e_ + 1])]
     # Boot code
     while len(r) % 4: r.append(0)
     at = len(r); d = tempfile.mkdtemp(); o, e, b = (os.path.join(d, n) for n in ('b.o', 'b.elf', 'b.bin'))
-    subprocess.check_call(['arm-none-eabi-gcc', '-mthumb', '-mcpu=arm7tdmi', '-Os', '-ffreestanding', '-nostdlib', '-DSCREENS=0x%X' % screens, '-DMOVIE=0x%X' % movie, '-DSPLASH=0x%X' % splash, '-DTITLE_SONG=0x%X' % (B + table + 20 * BF_TITLE_TRACK), '-c', os.path.join(ROOT, 'src', 'boot.c'), '-o', o])
+    subprocess.check_call(['arm-none-eabi-gcc', '-mthumb', '-mcpu=arm7tdmi', '-Os', '-ffreestanding', '-nostdlib', '-DSCREENS=0x%X' % screens, '-DMOVIE=0x%X' % movie, '-DSTORY_FONT=0x%X' % story[0], '-DSTORY_PAL=0x%X' % story[1], '-DSTORY_TEXT=0x%X' % story[2], '-DSFX_BASE=%d' % log1_music.SFX_BASE, '-DSPLASH=0x%X' % splash, '-DTITLE_SONG=0x%X' % (B + table + 20 * BF_TITLE_TRACK), '-c', os.path.join(ROOT, 'src', 'boot.c'), '-o', o])
     subprocess.check_call(['arm-none-eabi-gcc', '-mthumb', '-mcpu=arm7tdmi', '-nostdlib', '-Wl,-Ttext=0x%X' % (B + at), '-Wl,-e,boot_entry', o, '-lgcc', '-o', e])
     subprocess.check_call(['arm-none-eabi-objcopy', '-O', 'binary', '-j', '.text', e, b]); r.extend(open(b, 'rb').read())
     entry = int(next(l.split()[0] for l in subprocess.check_output(['arm-none-eabi-nm', e]).decode().splitlines() if l.endswith('boot_entry')), 16)
     play = int(next(l.split()[0] for l in subprocess.check_output(['arm-none-eabi-nm', e]).decode().splitlines() if l.endswith('play_movie')), 16) | 1
-    build_flight.EXTRA[:] = ['-DPLAY_MOVIE=0x%X' % play, '-DMOVIE_A=0x%X' % mv[0], '-DMOVIE_B=0x%X' % mv[1]]
+    pstory = int(next(l.split()[0] for l in subprocess.check_output(['arm-none-eabi-nm', e]).decode().splitlines() if l.endswith('play_story')), 16) | 1
+    build_flight.EXTRA[:] = ['-DPLAY_STORY=0x%X' % pstory, '-DPLAY_MOVIE=0x%X' % play, '-DMOVIE_A=0x%X' % mv[0], '-DMOVIE_B=0x%X' % mv[1]]
     # main: skip Buu's Fury's first logo, and run this in place of the rest of them
     nop(r, 0x41A6, 5)
     struct.pack_into('<HHHI', r, 0x41D2, 0x4B01, 0x4718, 0x46C0, entry | 1)

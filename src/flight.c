@@ -286,6 +286,8 @@ void flight_draw(int list) {
 #define DISPCNT (*(volatile u16 *)0x04000000)
 #define FLASH_FLAG 898
 #define MOVIE_FLAG 899
+#define STORY_FLAG 958
+#define OPENED_FLAG 959                    /* the opening after New Game has played */
 #define BLDCNT_ (*(volatile u16 *)0x04000050)
 #define BLDY_ (*(volatile u16 *)0x04000054)
 #define FLASH_LEFT (*(volatile u8 *)0x03005F20)
@@ -297,9 +299,18 @@ static void live_pictures(void) {
     if (AREA && *(u8 *)AREA == 26 && *(u8 *)(AREA + 1) >= PIC_FIRST) DISPCNT &= ~0x1000;
     if (FLAGS[FLASH_FLAG >> 3] >> (FLASH_FLAG & 7) & 1) { FLAGS[FLASH_FLAG >> 3] &= ~(1 << (FLASH_FLAG & 7)); FLASH_LEFT = 30; BLD_KEEP = BLDCNT_; BLDCNT_ = 0xBF; }
     if (FLASH_LEFT) { FLASH_LEFT--; BLDY_ = FLASH_LEFT >= 15 ? 16 : FLASH_LEFT; if (!FLASH_LEFT) { BLDCNT_ = BLD_KEEP; BLDY_ = 0; } }
+    if (FLAGS[STORY_FLAG >> 3] >> (STORY_FLAG & 7) & 1) { FLAGS[STORY_FLAG >> 3] &= ~(1 << (STORY_FLAG & 7)); ((void (*)(void))PLAY_STORY)(); }
     for (int m = 0; m < 2; m++) if (FLAGS[(MOVIE_FLAG + m) >> 3] >> ((MOVIE_FLAG + m) & 7) & 1) {
         FLAGS[(MOVIE_FLAG + m) >> 3] &= ~(1 << ((MOVIE_FLAG + m) & 7)); ((void (*)(u32))PLAY_MOVIE)(m ? MOVIE_B : MOVIE_A);
     }
+}
+
+/* A new game starts with LoG1's opening. */
+__attribute__((section(".text.table"))) volatile const u32 opening_ptr = 0;
+static void live_opening(void) {
+    if (!opening_ptr || !PLAYER || !AREA || *(u8 *)AREA != 26 || *(u8 *)(AREA + 1) != 1 || (FLAGS[OPENED_FLAG >> 3] >> (OPENED_FLAG & 7) & 1)) return;
+    FLAGS[OPENED_FLAG >> 3] |= 1 << (OPENED_FLAG & 7);
+    u32 zone[6] = {0, 0, 0, 0, 0, opening_ptr}; ZBUSY = 1; ((fn2)0x080073F1)(zone, PLAYER); ZBUSY = 0;
 }
 
 /* SELECT saves, with Buu's Fury's own save routine, to the slot this game was started from. Its menus don't offer it in this game. */
@@ -371,6 +382,7 @@ void flight_keys(u8 *st) {
     live_follow(fresh);
     if (DEBUG_LIST && PLAYER) { u32 zone[6] = {0, 0, 0, 0, 0, DEBUG_LIST}; DEBUG_LIST = 0; ((fn2)0x080073F1)(zone, PLAYER); }
     live_world(k, fresh);
+    live_opening();
     live_pose(fresh);
     int r = (k & KEY_R) != 0, pressed = r && !STATE[0]; STATE[0] = r;
     if (!pressed || !PLAYER || !AREA || *(u8 *)AREA != WORLD_ID) return;

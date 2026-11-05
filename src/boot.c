@@ -96,6 +96,8 @@ static void movie(const u8 *f) {
     }
     wait_release();
 }
+typedef void (*song_fn)(void *, const void *);
+static void song(const void *s) { ((song_fn)0x0803F111)(**(void ***)0x0800420C, s); }
 /* A movie in the middle of the story: the scene loads a map or picture straight afterwards, which redraws everything. */
 void play_movie(const u8 *f) {
     u16 keep = BLDCNT;
@@ -104,8 +106,6 @@ void play_movie(const u8 *f) {
     DISPCNT = 0x80; BG2PA = 0x100; BG2PD = 0x100; BLDCNT = keep;
     for (int y = 0; y < H; y++) for (int x = 0; x < W / 2; x++) VRAM[y * 120 + x] = 0;
 }
-typedef void (*song_fn)(void *, const void *);
-static void song(const void *s) { ((song_fn)0x0803F111)(**(void ***)0x0800420C, s); }
 void log1_boot(void) {
     *(volatile u8 *)0x030038A9 = 0;                                     /* main has already started the title song, but the logos are silent in LoG1 */
     DISPCNT = 0x80; BG2PA = 0x100; BG2PB = 0; BG2PC = 0; BG2PD = 0x100; BG2X = 0; BG2Y = 0;
@@ -116,6 +116,69 @@ void log1_boot(void) {
     movie((const u8 *)MOVIE);
     BG2PA = 0x100; BG2PD = 0x100; show((const screen_t *)SPLASH);
     DISPCNT = 0x80; BLDCNT = 0; BLDY = 0;
+}
+/* LoG1's opening after New Game: its story text typed into a blue box over a twinkling starfield, with the title song still playing. The box and letters are LoG1's font tiles,
+   drawn into a mode 4 page. The scene that runs this loads the first area straight afterwards, which redraws everything. */
+#define FONT_PAL 16
+#define T_CORNER 100
+#define T_SIDE 103
+#define T_TOP 102
+#define T_FILL 104
+#define COLS 24
+#define ROWS 4
+static void tile(int x, int y, int t, int flip) {                      /* x, y in tiles; 8x8 4bpp source */
+    const u8 *src = (const u8 *)STORY_FONT + t * 32;
+    for (int j = 0; j < 8; j++) for (int i = 0; i < 8; i++) {
+        int sx = flip & 1 ? 7 - i : i, sy = flip & 2 ? 7 - j : j, v = src[sy * 4 + sx / 2]; v = sx & 1 ? v >> 4 : v & 15;
+        PUT((y * 8 + j) * 240 + x * 8 + i, v ? FONT_PAL + v : 0);
+    }
+}
+static void box_clear(void) { for (int y = 4; y < 4 + ROWS; y++) for (int x = 3; x < 3 + COLS; x++) tile(x, y, T_FILL, 0); }
+#define N_STARS 96
+typedef struct { u8 x[N_STARS], y[N_STARS], b[N_STARS]; u32 seed; } sky_t;     /* on the stack: this code has no RAM of its own */
+static int rnd(sky_t *k, int n) { k->seed = k->seed * 0x41C64E6D + 0x3039; return (k->seed >> 16) % n; }
+static void step(sky_t *k, int frames) {
+    for (int f = 0; f < frames; f++) {
+        vsync();
+        for (int i = 0; i < N_STARS; i++) {
+            if (!rnd(k, 6)) k->b[i] = rnd(k, 9);
+            if (k->x[i] < 16 || k->x[i] >= 224 || k->y[i] < 24 || k->y[i] >= 72) PUT(k->y[i] * 240 + k->x[i], k->b[i]);
+        }
+    }
+}
+void play_story(void) {
+    const char *t = (const char *)STORY_TEXT; u16 keep = BLDCNT, prev = KEYS; sky_t sky; sky.seed = 0x2F6E2B1;
+    DISPCNT = 0x80; BG2PA = 0x100; BG2PB = 0; BG2PC = 0; BG2PD = 0x100; BG2X = 0; BG2Y = 0; BLDCNT = 0xC4; BLDY = 16;
+    for (int y = 0; y < 160; y++) for (int x = 0; x < 120; x++) VRAM[y * 120 + x] = 0;
+    PAL[0] = 0; for (int i = 0; i < 8; i++) PAL[i + 1] = (0x1F - 2 * i) * 0x421;
+    for (int i = 0; i < 16; i++) PAL[FONT_PAL + i] = ((const u16 *)STORY_PAL)[i];
+    for (int i = 0; i < N_STARS; i++) { sky.x[i] = rnd(&sky, 240); sky.y[i] = rnd(&sky, 160); sky.b[i] = rnd(&sky, 9); }
+    tile(2, 3, T_CORNER, 0); tile(3 + COLS, 3, T_CORNER, 1); tile(2, 4 + ROWS, T_CORNER, 2); tile(3 + COLS, 4 + ROWS, T_CORNER, 3);
+    for (int x = 3; x < 3 + COLS; x++) { tile(x, 3, T_TOP, 0); tile(x, 4 + ROWS, T_TOP, 2); }
+    for (int y = 4; y < 4 + ROWS; y++) { tile(2, y, T_SIDE, 0); tile(3 + COLS, y, T_SIDE, 1); }
+    box_clear(); DISPCNT = 0x0404;
+    song((const void *)TITLE_SONG);
+    for (int y = 16; y >= 0; y--) { BLDY = y; step(&sky, 2); }
+    int col = 0, row = 0;
+    while (*t) {
+        if (*t == ' ' && !col) { t++; continue; }
+        int w = 0; while (t[w] && t[w] != ' ') w++;
+        if (col + w >= COLS) { col = 0; row++; }
+        if (row == ROWS) {                                              /* the page is full: wait for a button */
+            do { prev = KEYS; step(&sky, 1); } while (!((prev & ~KEYS) & 9));
+            ((void (*)(void *, u32, int, int))0x0803E379)((void *)0x03003E5C, *(u32 *)0x080008F0 + (SFX_BASE + 0x11) * 12, 0x40, 0);
+            box_clear(); row = 0; col = 0; continue;
+        }
+        for (int i = 0; i < w + (t[w] == ' '); i++) {
+            if (col < COLS) { tile(3 + col, 4 + row, t[i] == ' ' ? T_FILL : t[i] - 30, 0); col++; }
+            step(&sky, (KEYS & 9) == 9 ? 3 : 1);
+        }
+        t += w + (t[w] == ' ');
+    }
+    do { prev = KEYS; step(&sky, 1); } while (!((prev & ~KEYS) & 9));
+    for (int y = 0; y <= 16; y++) { BLDY = y; step(&sky, 1); }
+    DISPCNT = 0x80; BLDCNT = keep; BLDY = 0;
+    for (int y = 0; y < 160; y++) for (int x = 0; x < 120; x++) VRAM[y * 120 + x] = 0;
 }
 __attribute__((naked)) void boot_entry(void) {
     __asm__("bl log1_boot\n ldr r0, =0x080041DD\n bx r0\n .ltorg");    /* back into main, after its own logos */

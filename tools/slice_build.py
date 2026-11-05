@@ -35,8 +35,9 @@ def main():
     print('actors added', new, 'without frames', act.missing, 'end', hex(cur)); print('arrival moves', [m for m in moved if m[2]]); print('skipped', collections.Counter(s[2] for s in skipped))
     print('music bytes', log1_music.install(r, log1))
     print('world map', log1_world.install(r, L, IDS, log1_areas.WORLD)); fly = [(tab + 56 * (log1_areas.COUNT + IDS.index(n)), scenes.NAMED['fly_%d' % n]) for n, _, _ in log1_world.PLACES if n in IDS]
+    sys.path.insert(0, os.path.join(DEPS, 'log1-decomp', 'tools', 'assets'))
     print('start', log1_start.install(r, log1, L, log1_start.MENU))
-    print('hook', build_flight.install(r, spawns, walks, picks, foes, zones, qc, follows, fly, log1_world.art(), log1_world.markers(), walkins, scenes.NAMED['game_saved'], pose_rows), 'spawns', len(spawns), 'walks', len(walks), 'pickups', len(picks), 'enemies', len(foes), 'hurt zones', len(zones), 'walk-in zones', len(walkins))
+    print('hook', build_flight.install(r, spawns, walks, picks, foes, zones, qc, follows, fly, log1_world.art(), log1_world.markers(), walkins, scenes.NAMED['game_saved'], pose_rows, scenes.NAMED['new_game_opening']), 'spawns', len(spawns), 'walks', len(walks), 'pickups', len(picks), 'enemies', len(foes), 'hurt zones', len(zones), 'walk-in zones', len(walkins))
     json.dump(dict({str(n): scenes.NAMED['dbg_%d' % n] for n in IDS}, **{'x%d' % n: scenes.NAMED['dbgx_%d' % n] for n in IDS}, **{k: v for k, v in scenes.NAMED.items() if k.startswith('dbgscene_')}), open(os.path.join(O, os.environ.get('OUT', 'slice') + '.lists.json'), 'w'))
     while len(r) % 0x10000: r.append(0xFF)
     log1_start.identity(r)

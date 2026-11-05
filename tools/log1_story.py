@@ -14,6 +14,7 @@ import log1_side  # noqa: E402
 QF, TF, EF, TOK, NOOP = 420, 500, 620, 870, 895
 PIC_SAVE, PIC_BACK, PIC_FIRST = 896, 897, 54                            # src/flight.c and log1_split: story pictures
 PAN = 30                                                                 # frames for a camera pan
+NEW_GAME_SPOT = (224, 232)                                                  # where LoG1 puts Goku after its opening (0x0800FEE0)
 POSE_FLAG = 960                                                          # src/flight.c's pose table
 FLASH_FLAG, MOVIE_FLAG, SPAWN_FLAG = 898, 899, 901                       # src/flight.c: cutscene flash, the two movies, characters that appear mid-scene
 MOVIE_LISTS = {0x084E4F20: 0, 0x081CA144: 1}                             # LoG1's lists that play a movie -> src/flight.c's movie
@@ -443,6 +444,7 @@ class Story:
                 self.doors[n].append(dict(kind='walk', rect=rect, list=name))
 
     def generate(self, path):
+        self.out += ['list new_game_opening', 'set_flag %d' % NOOP, 'do call 120 1; call 29 958; call 136 4', 'do call 119 26 1 1 %d %d; call 136 2; call 121 15' % NEW_GAME_SPOT, 'stop']
         self.out += ['list game_saved', 'narrate Game saved.']
         chk = self.check_list(); self.talk_lists(); self.place_lists(); self.pickup_lists(); self.zone_lists(); self.out = chk + self.out + world_lists(self.ids) + self.test_warps() + self.side.lists()
         open(path, 'w', encoding='utf-8').write('\n'.join(self.out) + '\n')
