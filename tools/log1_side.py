@@ -48,7 +48,7 @@ STEVE = dict(sprite='devil2', at=(528, 560), gear=15, paid=["Head Demon Steve: O
 # Later additions. Flags 366-394.
 QF = 420
 BUTLER_OPEN, SLIPPER, BUTLER_PAID = 366, 367, 370
-BUTLER = dict(area=11, sprite='snake', at=(230, 900), after=QF + 26, gear=54)
+BUTLER = dict(area=11, sprite='snake', at=(300, 890), after=QF + 26, gear=54)
 SLIPPERS = [((230, 1100), "A very small slipper. Snakes don't have feet. You decide not to ask."), ((200, 1300), "Another slipper, monogrammed 'P.S.' and slightly chewed."),
             ((220, 700), "The last slipper. It smells of perfume and regret.")]
 COACH_OPEN, COACH_KILLED, COACH_PAID = 371, 372, 375
@@ -61,7 +61,7 @@ AFTER_ELITES = QF + 52
 ELDER_PAID = 382
 ELDER = dict(area=24, sprite='oldman', at=(300, 500), after=QF + 53)
 RM_KILLED, RM_PAID, RM_OPEN = 383, 387, 391
-ANNOUNCER = dict(area=0, sprite='wiseman', at=(300, 160), after=QF + 68)
+ANNOUNCER = dict(area=0, sprite='wiseman', at=(325, 225), after=QF + 68)
 REMATCHES = [dict(sprite='raditz', at=(380, 200), name='Raditz', extra=0, line="Raditz: I came back to apologise. No, wait. To fight. It was to fight."),
              dict(sprite='nappa', at=(380, 200), name='Nappa', extra=3, line="Nappa: Vegeta says I have to do this before I can have dessert."),
              dict(sprite='vegeta2', at=(380, 200), name='Vegeta', extra=6, line="Vegeta: This changes nothing, Kakarot. I'm only here for the exercise."),
