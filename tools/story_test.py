@@ -272,7 +272,7 @@ else:
 print('start area', area(), pos())
 def dead():
     """A real game over stays gone. Cutscenes and story pictures reload the area, which clears the player for a moment."""
-    for _ in range(12):
+    for _ in range(4):
         if area() >= 0 and player() != 0: return False
         step(['60'])                                                  # no buttons: A on a game over screen would start a new game
     return True
