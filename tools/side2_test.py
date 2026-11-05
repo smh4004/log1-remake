@@ -12,12 +12,12 @@ def setf(f):
 def stats(): run(['dump _h 03001574 4']); step(['w8 03001576 ff', 'w8 03001577 7f', '1'])
 print('start', area(), pos(), flush=True)
 setf(S.BUTLER['after']); print('warp 11', warp(11), area()); step(['40']); x, y = near(11, *S.BUTLER['at']); print('butler talk', talk(11, x, y, S.BUTLER_OPEN), free(30), flush=True)
-for i, (at, _) in enumerate(S.SLIPPERS):
-    x, y = near(11, *at); place(x - 30 if fits(11, x - 30, y) else x, y); step(['20']); place(x, y); step(['60']); free(30); print('slipper', i, flag(S.SLIPPER + i), flush=True)
+for i, (spot_, _) in enumerate(S.SLIPPERS):
+    x, y = near(11, *spot_); place(x - 30 if fits(11, x - 30, y) else x, y); step(['20']); place(x, y); step(['60']); free(30); print('slipper', i, flag(S.SLIPPER + i), flush=True)
 x, y = near(11, *S.BUTLER['at']); print('butler paid', talk(11, x, y, S.BUTLER_PAID), free(30), flush=True)
 setf(S.COACH['after']); print('warp 13', warp(13), area()); step(['40']); x, y = near(13, *S.COACH['at']); print('coach talk', talk(13, x, y, S.COACH_OPEN), free(30), flush=True)
-for i, at in enumerate(S.COACH['foes']):
-    stats(); x, y = near(13, *at); print('ghost', i, kill(13, x, y, S.COACH_KILLED + i), free(30), flush=True)
+for i, spot_ in enumerate(S.COACH['foes']):
+    stats(); x, y = near(13, *spot_); print('ghost', i, kill(13, x, y, S.COACH_KILLED + i), free(30), flush=True)
 print('coach paid', flag(S.COACH_PAID), flush=True)
 setf(S.AFTER_ELITES)
 for i, e in enumerate(S.ELITES):
