@@ -5,7 +5,8 @@ typedef unsigned char u8; typedef unsigned short u16; typedef unsigned int u32;
 /* Hook RAM is 0x03005F00-0x030061FF in IWRAM. It must stay out of the top of EWRAM: 0x0203E000-0x0203FFFF is the game's save buffer. */
 #define INIT_AT ((volatile unsigned *)0x03005F00)
 #define INIT_MAGIC (*(volatile unsigned *)0x030061F8)
-static void ram_init(void) { if (INIT_MAGIC == 0x31474F4C) return; for (int i = 0; i < 0x300 / 4; i++) INIT_AT[i] = 0; INIT_MAGIC = 0x31474F4C; }
+static void ram_init(void) { if (INIT_MAGIC == 0x31474F4C && *(volatile u32 *)0x03001980) return;   /* no area: back at the title, so the next game starts clean */
+    for (int i = 0; i < 0x300 / 4; i++) INIT_AT[i] = 0; INIT_MAGIC = 0x31474F4C; }
 #define KEYS   (*(volatile u16 *)0x04000130)
 #define FLOOR  (*(volatile u32 *)0x03001A4C)
 #define AIR    (*(volatile u32 *)0x03001A50)
