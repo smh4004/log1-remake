@@ -98,6 +98,7 @@ def build(L):
             for i_, t in enumerate(L_):
                 k = t['type']
                 if k == 'add_warp':
+                    if t['x2'] < t['x1']: t = dict(t, x2=t['x1'] + t['x2'])    # LoG1 stores quest 33's door with a width here: a right edge left of its left edge never triggers on walking
                     if t['area'] == AREA:
                         c = section(t['x1'], t['y1']); a0, b0 = shift(c, t['x1'], t['y1']); a1, b1 = shift(c, t['x2'], t['y2']); t = dict(t, area=c, x1=a0, y1=b0, x2=a1, y2=b1)
                     if t['to_area'] == AREA: t = to_section(t)
