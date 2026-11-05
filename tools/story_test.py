@@ -286,7 +286,7 @@ for attempt in range(4):                                                # numeri
             if not dead(): break
             print('  GAME OVER in quest', n, ': reloading', flush=True)
             if os.environ.get('TRACE'): run(['shot dead_q%d_%d' % (n, tries)])
-            reload()
+            reload(); step([str(29 + 37 * tries)])                        # the emulator is deterministic, so a retry has to differ or it just repeats
         done = flag(QF + n)
         print('pass', attempt, 'quest', n, x.get('name'), 'done' if done else 'NOT DONE', [r[1] for r in res], 'area', area(), pos(), flush=True)
         if os.environ.get('NO_TOPUP'): print('   ', status(), flush=True)

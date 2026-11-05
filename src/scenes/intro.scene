@@ -1,0 +1,3 @@
+# New game: skips Buu's Fury's intro and chapter card and goes straight to the opening list.
+replace 0x77CBF0
+keep 19

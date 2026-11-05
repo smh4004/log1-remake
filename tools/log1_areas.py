@@ -11,7 +11,7 @@ import map_convert as C  # noqa: E402
 BB, WORLD = 0x08000000, 26
 AREAS, COUNT, TABLE_LIT, COUNT_INSN = 0x8E2E0, 452, 0x8A58, 0x125E0     # same values as Gero's tools/areas.py
 # first-listed scouter ID is used until forms are confirmed
-BF_IDX = dict(roshi=186, bulma=41, krillin1=166, krillin2=166, gohan1=107, gohan2=107, gohan3=107, goku=115, chichi=66, piccolo=222, yamcha=302, tien=264, chaitzu=65, kingkai=161, kingyema=163, popo=193, korrin=165, puar=233, dende=77, bubbles=40, gregory=135)
+BF_IDX = dict(roshi=186, bulma=41, krillin1=166, krillin2=166, goku=115, chichi=66, piccolo=222, yamcha=302, tien=264, chaitzu=65, kingkai=161, kingyema=163, popo=193, korrin=165, puar=233, dende=77, bubbles=40, gregory=135)
 
 
 def door_dir(a, rect):

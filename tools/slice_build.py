@@ -5,7 +5,7 @@
 import collections, json, os, struct, subprocess, sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path[:0] = [os.path.join(ROOT, 'tools'), os.path.join(ROOT, 'vendor', 'gero-tools', 'tools')]
-import log1_balance, log1_music, log1_split, build_flight, log1_actors, log1_areas, log1_portraits, log1_story, log1_world, scenes, text_tool  # noqa: E402
+import log1_start, log1_balance, log1_music, log1_split, build_flight, log1_actors, log1_areas, log1_portraits, log1_story, log1_world, scenes, text_tool  # noqa: E402
 
 
 IDS = [int(v) for v in os.environ['IDS'].split(',')] if os.environ.get('IDS') else log1_split.ids(); LAST_QUEST = int(os.environ.get('LAST_QUEST', 74))
@@ -22,7 +22,7 @@ def main():
     op = os.path.join(ROOT, 'src', 'scenes', 'opening.scene')
     if os.environ.get('START'):                          # test builds: START=area,x,y begins somewhere else
         an, x, y = os.environ['START'].split(','); op2 = os.path.join(O, 'opening_test.scene'); open(op2, 'w').write(open(op).read().replace('call 119 26 1 1 184 72', 'call 119 26 %d 1 %s %s' % (int(an) + 1, x, y))); op = op2
-    sc = [scenes.parse(op), scenes.parse(path)]
+    sc = [scenes.parse(op), scenes.parse(os.path.join(ROOT, 'src', 'scenes', 'intro.scene')), scenes.parse(path)]
     if not os.path.exists(os.path.join(O, 'text', 'ui.txt')): text_tool.export(bf, os.path.join(O, 'text'))
     log1_world.ui_text(os.path.join(O, 'text', 'ui_log1.txt'))
     r = bytearray(text_tool.build(bf, os.path.join(O, 'text'), extra=scenes.texts(sc))); r += b'\xff' * max(0, 0x1000000 - len(r))
@@ -35,6 +35,7 @@ def main():
     print('actors added', new, 'without frames', act.missing, 'end', hex(cur)); print('arrival moves', [m for m in moved if m[2]]); print('skipped', collections.Counter(s[2] for s in skipped))
     print('music bytes', log1_music.install(r, log1))
     print('world map', log1_world.install(r, L, IDS, log1_areas.WORLD)); fly = [(tab + 56 * (log1_areas.COUNT + IDS.index(n)), scenes.NAMED['fly_%d' % n]) for n, _, _ in log1_world.PLACES if n in IDS]
+    print('start', log1_start.install(r, log1, L, log1_start.MENU))
     print('hook', build_flight.install(r, spawns, walks, picks, foes, zones, qc, follows, fly, log1_world.art(), log1_world.markers(), walkins), 'spawns', len(spawns), 'walks', len(walks), 'pickups', len(picks), 'enemies', len(foes), 'hurt zones', len(zones), 'walk-in zones', len(walkins))
     json.dump(dict({str(n): scenes.NAMED['dbg_%d' % n] for n in IDS}, **{'x%d' % n: scenes.NAMED['dbgx_%d' % n] for n in IDS}), open(os.path.join(O, os.environ.get('OUT', 'slice') + '.lists.json'), 'w'))
     while len(r) % 0x10000: r.append(0xFF)

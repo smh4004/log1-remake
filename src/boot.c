@@ -1,0 +1,110 @@
+/* Boot sequence from LoG1: legal screen, publisher and developer logos, then the intro movie. It runs once before Buu's Fury starts,
+   so it polls the display itself. Screens and movie are copied from your ROM at build time (tools/log1_start.py). */
+typedef unsigned char u8; typedef unsigned short u16; typedef unsigned int u32; typedef signed char s8;
+#define DISPCNT (*(volatile u16 *)0x04000000)
+#define VCOUNT  (*(volatile u16 *)0x04000006)
+#define BG2PA   (*(volatile u16 *)0x04000020)
+#define BG2PB   (*(volatile u16 *)0x04000022)
+#define BG2PC   (*(volatile u16 *)0x04000024)
+#define BG2PD   (*(volatile u16 *)0x04000026)
+#define BG2X    (*(volatile u32 *)0x04000028)
+#define BG2Y    (*(volatile u32 *)0x0400002C)
+#define BLDCNT  (*(volatile u16 *)0x04000050)
+#define BLDY    (*(volatile u16 *)0x04000054)
+#define KEYS    (*(volatile u16 *)0x04000130)
+#define PAL     ((volatile u16 *)0x05000000)
+#define VRAM    ((volatile u16 *)0x06000000)
+#define CANVAS  ((u8 *)0x02020000)
+#define W 120
+#define H 80
+typedef struct { const u16 *pal; const u16 *pix; u32 hold; } screen_t;
+typedef void (*fn0)(void);
+static const screen_t *const screens = (const screen_t *)SCREENS;
+
+static void vsync(void) { while (VCOUNT >= 160); while (VCOUNT < 160); }
+static int skip(void) { return (~KEYS & 9) != 0; }                    /* A or START */
+static void wait_release(void) { while (skip()) vsync(); }
+static void dma16(volatile void *d, const void *s, u32 n) {
+    *(volatile u32 *)0x040000D4 = (u32)s; *(volatile u32 *)0x040000D8 = (u32)d; *(volatile u32 *)0x040000DC = n | 0x80000000;
+    while (*(volatile u32 *)0x040000DC & 0x80000000);
+}
+static void fade(int from, int to) {
+    int s = from < to ? 1 : -1;
+    for (int y = from; y != to + s; y += s) { BLDY = y; vsync(); }
+}
+static void show(const screen_t *p) {
+    BLDCNT = 0xC4; BLDY = 16; dma16(PAL, p->pal, 256); dma16(VRAM, p->pix, 240 * 160 / 2);
+    fade(16, 0);
+    for (u32 i = 0; i < p->hold && !skip(); i++) vsync();
+    wait_release(); fade(0, 16);
+}
+static u32 rd16(const u8 *p) { return p[0] | p[1] << 8; }
+static u32 rd32(const u8 *p) { return rd16(p) | rd16(p + 2) << 16; }
+static void colours(const u8 *p, int shift) {
+    int packets = rd16(p), at = 0; p += 2;
+    while (packets--) {
+        at += *p++; int n = *p++; if (!n) n = 256;
+        while (n-- && at < 256) { int r = p[0] << shift, g = p[1] << shift, b = p[2] << shift; PAL[at++] = (r >> 3) | (g >> 3) << 5 | (b >> 3) << 10; p += 3; }
+    }
+}
+static void chunk(int type, const u8 *p) {
+    u8 *c = CANVAS;
+    if (type == 4) colours(p, 0);
+    else if (type == 11) colours(p, 2);
+    else if (type == 13) { for (int i = 0; i < W * H; i++) c[i] = 0; }
+    else if (type == 16) { for (int i = 0; i < W * H; i++) c[i] = p[i]; }
+    else if (type == 15) {
+        for (int y = 0; y < H; y++) {
+            u8 *d = c + y * W, *e = d + W; p++;
+            while (d < e) { int n = (s8)*p++; if (n >= 0) { int v = *p++; while (n--) *d++ = v; } else { while (n++) *d++ = *p++; } }
+        }
+    } else if (type == 12) {
+        int y = rd16(p), lines = rd16(p + 2); p += 4;
+        while (lines--) {
+            u8 *d = c + y++ * W; int packets = *p++;
+            while (packets--) { d += *p++; int n = (s8)*p++; if (n >= 0) { while (n--) *d++ = *p++; } else { int v = *p++; while (n++) *d++ = v; } }
+        }
+    } else if (type == 7) {
+        int lines = rd16(p), y = 0; p += 2;
+        while (lines > 0) {
+            int w = (short)rd16(p); p += 2;
+            if ((w & 0xC000) == 0xC000) { y -= w; continue; }
+            if (w & 0x8000) { c[y * W + W - 1] = w & 0xFF; continue; }
+            u8 *d = c + y * W; lines--;
+            while (w--) {
+                d += *p++; int n = (s8)*p++;
+                if (n >= 0) { while (n--) { *d++ = p[0]; *d++ = p[1]; p += 2; } }
+                else { while (n++) { *d++ = p[0]; *d++ = p[1]; } p += 2; }
+            }
+            y++;
+        }
+    }
+}
+static void movie(const u8 *f) {
+    int frames = rd16(f + 6); const u8 *p = f + 128; u32 *z = (u32 *)CANVAS;
+    int wait = rd32(f + 16) * 6 / 7; if (wait < 1) wait = 1;
+    for (int i = 0; i < W * H / 4; i++) z[i] = 0;
+    BLDY = 0; BLDCNT = 0;
+    for (int n = 0; n < frames && !skip(); n++) {
+        u32 size = rd32(p); int kind = rd16(p + 4);
+        if (kind == 0xF1FA) {
+            int count = rd16(p + 6); const u8 *q = p + 16;
+            while (count--) { chunk(rd16(q + 4), q + 6); q += rd32(q); }
+            for (int y = 0; y < H; y++) dma16(VRAM + y * 120, CANVAS + y * W, W / 2);
+        }
+        p += size;
+        for (int w = 0; w < wait; w++) vsync();
+    }
+    wait_release();
+    for (int i = 0; i < W * H / 4; i++) z[i] = 0;
+}
+void log1_boot(void) {
+    DISPCNT = 0x80; BG2PA = 0x100; BG2PB = 0; BG2PC = 0; BG2PD = 0x100; BG2X = 0; BG2Y = 0;
+    BLDCNT = 0xC4; BLDY = 16; DISPCNT = 0x0404;
+    for (const screen_t *p = screens; p->pal; p++) show(p);
+    BG2PA = 0x80; BG2PD = 0x80;
+    for (int y = 0; y < H; y++) { volatile u16 *v = VRAM + y * 120; for (int x = 0; x < W / 2; x++) v[x] = 0; }
+    movie((const u8 *)MOVIE);
+    DISPCNT = 0x80; BLDCNT = 0; BLDY = 0; BG2PA = 0x100; BG2PD = 0x100;
+    ((fn0)0x08046AED)();                                               /* Buu's Fury's start-up, which returns into its main function */
+}

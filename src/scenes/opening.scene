@@ -1,6 +1,5 @@
 # New game: replaces Buu's Fury's opening list and starts on LoG1's first area (world 26, area 1).
-# Kept from BF: step 1 scene setup, step 17 hands control back.
+# Step 17 hands control back. Step 1 is left out because it shows Buu's Fury's chapter card.
 replace 0x780550
-keep 1
 do call 120 1; call 119 26 1 1 184 72; call 121 60
 keep 17
