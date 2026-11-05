@@ -270,7 +270,12 @@ else:
     for q in range(first): setf(QF + q)
     step(['2']); ckpt(-1)
 print('start area', area(), pos())
-def dead(): return area() < 0 or player() == 0
+def dead():
+    """A real game over stays gone. Cutscenes and story pictures reload the area, which clears the player for a moment."""
+    for _ in range(12):
+        if area() >= 0 and player() != 0: return False
+        step(['60'])                                                  # no buttons: A on a game over screen would start a new game
+    return True
 todo = [x for x in Q[first:last + 1]]
 for attempt in range(4):                                                # numeric order isn't always story order, so later passes retry what was blocked
     bad = []
