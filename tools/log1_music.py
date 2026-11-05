@@ -9,6 +9,7 @@ TRACKS, N_SONGS, SAMPLES, N_SAMPLES, DICT = 0x591F3C, 18, 0x591E4C, 20, 0x142388
 BF_TABLE, BF_SONGS, BASE = 0x3BB78C, 53, 53
 REFS = (0x8F8, 0x4210, 0x545C, 0x8D10)                                 # the code's pointers to Buu's Fury's song table
 B = 0x08000000
+SFX_BF, SFX_LOG1, SFX_BASE, SFX_LOG1_N, SFX_REF = 0x3192A8, 0x5C0B0C, 64, 31, 0x8F0        # the play_sfx native's table; LoG1's effects follow Buu's Fury's
 
 
 def install(r, log1):
@@ -33,4 +34,13 @@ def install(r, log1):
     t = put(bytes(table))
     for ref in REFS:
         assert struct.unpack_from('<I', r, ref)[0] == B + BF_TABLE; struct.pack_into('<I', r, ref, t)
+    install_sfx(r, log1, put)
     return total + sum(0 for _ in ())
+
+
+def install_sfx(r, log1, put):
+    """LoG1's sound effects, added after Buu's Fury's in a new table for the play_sfx native. Same format in both games: {-> sample, loop, length | rate << 16}."""
+    assert struct.unpack_from('<I', r, SFX_REF)[0] == B + SFX_BF; table = bytearray(r[SFX_BF:SFX_BF + 12 * SFX_BASE])
+    for k in range(SFX_LOG1_N):
+        p, z, w = struct.unpack_from('<3I', log1, SFX_LOG1 + 12 * k); table += struct.pack('<3I', put(log1[p - B:p - B + (w & 0xFFFF) + 4]), z, w)
+    struct.pack_into('<I', r, SFX_REF, put(bytes(table)))

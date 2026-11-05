@@ -13,6 +13,7 @@ import log1_side  # noqa: E402
 
 QF, TF, EF, TOK, NOOP = 420, 500, 620, 870, 895
 PIC_SAVE, PIC_BACK, PIC_FIRST = 896, 897, 54                            # src/flight.c and log1_split: story pictures
+import log1_music  # noqa: E402
 MUSIC_BASE = 53                                        # log1_music.BASE: LoG1's songs follow Buu's Fury's 53
 EV, PENDING = 720, 893   # one-shot event flags; a story enemy died, so the map-wide zone should run quest_check
 PF = 100                                               # area pickups: PF.. one flag each (Buu's Fury's own story, which used these, is gone)
@@ -147,6 +148,7 @@ class Story:
             if f == '0800CC75':                                  # a full-screen picture; the dialogue that follows draws over it
                 r.append('do ' + ('call 29 %d; call 136 2; ' % PIC_SAVE if not pic else '') + 'call 120 15; call 119 26 %d 1 8 8; call 121 15' % (PIC_FIRST + b[0] + 1)); pic = True; continue
             if f == '0800E079': r.append('do call 35 %d' % (MUSIC_BASE + b[0])); continue
+            if f == '0800D26D': r.append('do call 31 %d' % (log1_music.SFX_BASE + struct.unpack_from('<I', b)[0])); continue
             if f == '0800DF15':                                  # the closing text
                 a_ = struct.unpack_from('<I', b)[0] & 0x1FFFFFF; r += ['narrate ' + p for p in split_line(self.rom[a_:self.rom.index(b'\0', a_)].decode('latin1').replace('{', '(').replace('}', ')').strip())]; continue
             if f == '0800CB25' or f == '0800D9C5':
