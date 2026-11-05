@@ -41,6 +41,7 @@ def main():
     json.dump(dict({str(n): scenes.NAMED['dbg_%d' % n] for n in IDS}, **{'x%d' % n: scenes.NAMED['dbgx_%d' % n] for n in IDS}, **{k: v for k, v in scenes.NAMED.items() if k.startswith('dbgscene_')}), open(os.path.join(O, os.environ.get('OUT', 'slice') + '.lists.json'), 'w'))
     while len(r) % 0x10000: r.append(0xFF)
     log1_start.identity(r)
+    log1_start.alive(r)
     open(os.path.join(O, os.environ.get('OUT', 'slice') + '.gba'), 'wb').write(r); print('rom', len(r))
 
 
