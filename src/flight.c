@@ -297,10 +297,22 @@ static void live_pictures(void) {
     }
 }
 
+/* SELECT saves, with Buu's Fury's own save routine, to the slot this game was started from. Its menus don't offer it in this game. */
+__attribute__((section(".text.table"))) volatile const u32 saved_ptr = 0;
+#define SAVE_HELD (*(volatile u8 *)0x03005F21)
+static void live_save(u32 k) {
+    int held = (k & 4) != 0, pressed = held && !SAVE_HELD; SAVE_HELD = held;
+    if (!pressed || !PLAYER || !AREA || *(u8 *)AREA != WORLD_ID || *(u8 *)(AREA + 1) >= PIC_FIRST || STATE[1] || ZBUSY) return;
+    int at[2] = {*(int *)(PLAYER + 0x1A0) >> 8, *(int *)(PLAYER + 0x1A4) >> 8};
+    ((void (*)(u32, u32, int *, int))0x08004963)(0x03001068, *(volatile u32 *)0x03001910, at, 0);   /* records the area and spot, marks the slot and writes it */
+    u32 zone[6] = {0, 0, 0, 0, 0, saved_ptr}; ZBUSY = 1; ((fn2)0x080073F1)(zone, PLAYER); ZBUSY = 0;
+}
+
 void flight_keys(u8 *st) {
     ram_init();
     live_pictures();
     u32 k = ~(u32)KEYS & 0xFFFF;
+    live_save(k);
     ((fn2)0x0804023D)(st, k);
     if (!(~*(u16 *)(st + 2) & 0xF) && st[1] && (*(u16 *)(st + 4) & 0xF)) ((fn0)0x0803FA0D)();
     int fresh = AREA != LAST;
