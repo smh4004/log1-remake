@@ -146,7 +146,7 @@ class Story:
     def scene(self, i, area=None):
         """Plays a cutscene: dialogue, walks, pictures, movies, music, sound effects, fades, flashes and characters appearing. Poses and sprite swaps go through src/flight.c's pose table."""
         r = []; pic = dark = False; cmds = self.scenes[i]['commands']; appeared = set()
-        panned = False; cam = [None]; where = {}; posed = {}; alias = {}                                    # actors currently holding a pose -> keep it through walks?; LoG1 sprite swapped in -> the actor on the map
+        panned = False; cam = [None]; focus = [None]; where = {}; walked = set(); posed = {}; alias = {}                                    # actors currently holding a pose -> keep it through walks?; LoG1 sprite swapped in -> the actor on the map
         def actor_of(who):
             who = alias.get(who, who); nm = self.names[who] if who < len(self.names) else None
             return nm if nm and (nm == 'goku' or who in appeared or self.movable(area, who)) else None
@@ -197,9 +197,9 @@ class Story:
                 who = alias.get(b[0], b[0]); nm = actor_of(who); light(); m_ = self.movable(area, who) if nm != 'goku' else None
                 spot = where.get(who) or (m_ and m_.get('x') is not None and (m_['x'], m_['y'])) or next((struct.unpack_from('<HH', bytes.fromhex(l['raw']), 0) for l in cmds[k + 1:] if l['fn'] == '0800CAC9' and struct.unpack_from('<H', bytes.fromhex(l['raw']), 4)[0] == who), None)
                 if nm == 'goku': cam[0] = 'do call 49 0 %d' % PAN
-                elif spot and area in self.areas: cam[0] = 'do call 50 %d %d %d' % (max(0, spot[0] - 120), max(0, spot[1] - 80), PAN)   # by position: a character who isn't on the map would crash the actor pan
+                elif spot and area in self.areas: cam[0] = 'do call 50 %d %d %d' % (max(0, spot[0] - 120), max(0, spot[1] - 80), PAN)   # by position: a character who isn't on the map would crash the actor commands
                 else: r.append('do call 136 20'); continue
-                r.append(cam[0]); panned = True; continue
+                r.append(cam[0]); panned = True; focus[0] = who; continue
             if f in ('0800CA75', '0800DC49') and len(b) >= 2:    # an animation frame; CA75 waits for it
                 who = alias.get(b[0], b[0]); nm = self.names[who] if who < len(self.names) else None
                 if nm:
@@ -229,14 +229,19 @@ class Story:
             if f == '0800DF15':                                  # the closing text
                 a_ = struct.unpack_from('<I', b)[0] & 0x1FFFFFF; r += ['narrate ' + p for p in split_line(self.rom[a_:self.rom.index(b'\0', a_)].decode('latin1').replace('{', '(').replace('}', ')').strip())]; continue
             if f == '0800CB25' or f == '0800D9C5':
-                a = None if b[0] in appeared else self.movable(area, b[0])   # a character who appeared this scene already stands at the end of its walk
-                if f == '0800CB25': x, y = struct.unpack_from('<HH', b, 4)
+                who = alias.get(b[0], b[0]); swapped = who != b[0]
+                a = self.movable(area, who) or (dict() if who in appeared else None)
+                if f == '0800CB25':
+                    x, y = struct.unpack_from('<HH', b, 4)
+                    if who in appeared and who not in walked: walked.add(who); a = None   # a character who appeared this scene already stands at the end of their first walk
                 else:
-                    o = self.movable(area, b[2])
-                    if not o or o['x'] is None: a = None                # no fixed spot to walk to
-                    else: x, y = o['x'] + struct.unpack_from('<h', b, 4)[0], o['y'] + struct.unpack_from('<h', b, 6)[0]
-                if a:
-                    light(); nm = self.names[b[0]]; where[b[0]] = (x, y)
+                    t = alias.get(b[2], b[2]); o = self.movable(area, t); spot = where.get(t) or (o and o.get('x') is not None and (o['x'], o['y']))
+                    if not spot: a = None                               # no fixed spot to walk to
+                    else: x, y = spot[0] + struct.unpack_from('<h', b, 4)[0], spot[1] + struct.unpack_from('<h', b, 6)[0]
+                if a is not None:
+                    light(); nm = self.names[who]; where[who] = (x, y)
+                    if panned and (swapped or who == focus[0]) and nm != 'goku':     # the camera doesn't follow a character, so it goes to where they're heading first, and they walk into shot
+                        cam[0] = 'do call 50 %d %d %d' % (max(0, x - 120), max(0, y - 80), PAN); r.append(cam[0]); focus[0] = who
                     unpose(nm)
                     if nm == 'goku': r.append('do call 56; call 96 0 %d %d; call 58' % (x, y)); continue
                     self.move_names.add(nm); r.append('do call 56; call 96 %s %d %d; call 58' % (nm, x, y)); continue
