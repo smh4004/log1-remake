@@ -50,6 +50,7 @@ def area_name(n):
 def ui_text(path):
     with open(path, 'w', encoding='utf-8') as f:
         f.write('[ui:%d]\n= Press Start\n\n' % TITLE_START)
+        f.write('[ui:614]\n= Keep the Earth safe\n\n')                # the journal's first goal, which was Buu's Fury's
         f.write('[ui:602]\n= Legacy of Goku\n\n')                     # Select Game's chapter line; this game has no sagas
         for i, (_, _, name) in enumerate(PLACES): f.write('[ui:%d]\n= %s\n\n' % (UI + i, name))
         for name, i in NAME_UI.items(): f.write('[ui:%d]\n= %s\n\n' % (i, name))

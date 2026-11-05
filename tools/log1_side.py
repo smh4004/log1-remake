@@ -45,6 +45,28 @@ SPIRITS = [
 ]
 STEVE = dict(sprite='devil2', at=(528, 560), gear=15, paid=["Head Demon Steve: Ow! Okay! Okay! You have the good manners to punch me in the face!", "Head Demon Steve: Take this armor. It's the Dark kind. I only wear it to parties, and nobody invites me."])
 
+# Later additions. Flags 366-394.
+QF = 420
+BUTLER_OPEN, SLIPPER, BUTLER_PAID = 366, 367, 370
+BUTLER = dict(area=11, sprite='snake', at=(230, 900), after=QF + 26, gear=54)
+SLIPPERS = [((230, 1100), "A very small slipper. Snakes don't have feet. You decide not to ask."), ((200, 1300), "Another slipper, monogrammed 'P.S.' and slightly chewed."),
+            ((220, 700), "The last slipper. It smells of perfume and regret.")]
+COACH_OPEN, COACH_KILLED, COACH_PAID = 371, 372, 375
+COACH = dict(area=13, sprite='crab', at=(120, 300), after=QF + 35, gear=52, foes=[(200, 280), (300, 340), (420, 300)], enemy='devil1')
+ELITE_KILLED, ELITE_PAID = 376, 379
+ELITES = [dict(area=24, sprite='hench7', at=(640, 420), gear=None, paid="Sergeant Second-to-Last falls over. He had one job, and it was mostly standing."),
+          dict(area=28, sprite='hench8', at=(500, 300), gear=None, paid="Lieutenant Quite-Important drops his clipboard. It lists his own name, circled."),
+          dict(area=31, sprite='hench6', at=(420, 300), gear=57, paid="Major Actually-Pretty-Good gives you his favourite gear. He says it's for your trouble. He seems relieved.")]
+AFTER_ELITES = QF + 52
+ELDER_PAID = 382
+ELDER = dict(area=24, sprite='oldman', at=(300, 500), after=QF + 53)
+RM_KILLED, RM_PAID, RM_OPEN = 383, 387, 391
+ANNOUNCER = dict(area=0, sprite='wiseman', at=(300, 160), after=QF + 68)
+REMATCHES = [dict(sprite='raditz', at=(380, 200), name='Raditz', extra=0, line="Raditz: I came back to apologise. No, wait. To fight. It was to fight."),
+             dict(sprite='nappa', at=(380, 200), name='Nappa', extra=3, line="Nappa: Vegeta says I have to do this before I can have dessert."),
+             dict(sprite='vegeta2', at=(380, 200), name='Vegeta', extra=6, line="Vegeta: This changes nothing, Kakarot. I'm only here for the exercise."),
+             dict(sprite='frieza4', at=(380, 200), name='Frieza', extra=9, gear=45, line="Frieza: You have five minutes. I've booked the island until two.")]
+
 
 def say(who, text):
     t = text.replace('{', '(').replace('}', ')')
@@ -68,11 +90,13 @@ class Side:
         for i, b in enumerate(BOUNTIES):
             o += ['if_flag %d b_%d' % (PAID + i, i)] + say('Officer Pudding', 'Still out there: %s. Please hurry. I have promised the press a photo.' % b['name']) + ['stop', 'label b_%d' % i]
         o += say('Officer Pudding', "All five! You've put me out of a job, citizen. I'm going to go lie down in a field.") + ['stop']
+        o += self.more_lists()
         o += ['list side_check', 'set_flag 895']
         for i, b in enumerate(BOUNTIES):
             o += ['if_flag %d sc%d' % (PAID + i, i), 'unless_flag %d sc%d' % (KILLED + i, i), 'set_flag %d' % (PAID + i)]
             for t in b['paid']: o += say(None, t)
             o += ['do call 194 %d' % self.st.bal.quest_exp(b['area'], True)] + (['do call 147 %d' % b['gear']] if 'gear' in b else []) + ['label sc%d' % i]
+        o += self.more_checks()
         o += ['if_flag %d sc_s' % STEVE_PAID, 'unless_flag %d sc_s' % STEVE_DEAD, 'set_flag %d' % STEVE_PAID]
         for t in STEVE['paid']: o += say(None, t)
         o += ['do call 194 %d' % self.st.bal.quest_exp(HELL, True), 'do call 147 %d' % STEVE['gear'], 'label sc_s', 'stop']
@@ -88,6 +112,44 @@ class Side:
             if i == len(SPIRITS) - 1: o.append('set_flag %d' % STEVE_OPEN)
             o += ['label de%d' % i]
         return o + ['stop']
+
+    def more_lists(self):
+        o = ['list side_butler', 'set_flag 895']
+        o += ['if_flag %d bu_paid' % BUTLER_PAID, 'if_flag %d bu_open' % BUTLER_OPEN, 'set_flag %d' % BUTLER_OPEN]
+        o += say('Snake Butler', "Excuse me, sir. Her Highness has mislaid her slippers somewhere along Snake Way. Three of them.")
+        o += say('goku', "Why does a snake need slippers?") + say('Snake Butler', "I have worked here four hundred years, sir, and I have learned not to ask.") + ['stop', 'label bu_open']
+        for i in range(len(SLIPPERS)): o += ['unless_flag %d bu_wait' % (SLIPPER + i)]
+        o += ['set_flag %d' % BUTLER_PAID] + say('Snake Butler', "All three! Her Highness will be thrilled, or at least less terrifying. Please accept these. They were a gift she didn't care for.")
+        o += ['do call 194 %d' % self.st.bal.quest_exp(BUTLER['area'], True), 'do call 147 %d' % BUTLER['gear'], 'stop', 'label bu_wait']
+        o += say('Snake Butler', "Still searching, sir? Do mind the edge. It's a long way down, and it's mostly paperwork.") + ['stop', 'label bu_paid']
+        o += say('Snake Butler', "Her Highness has now lost a hat. I shall tell her you've retired.") + ['stop']
+        for i, (_, t) in enumerate(SLIPPERS):
+            o += ['list side_slip%d' % i, 'set_flag 895', 'unless_flag %d sl%d' % (BUTLER_OPEN, i), 'if_flag %d sl%d' % (SLIPPER + i, i), 'set_flag %d' % (SLIPPER + i)] + say(None, t) + ['label sl%d' % i, 'stop']
+        o += ['list side_coach', 'set_flag 895', 'if_flag %d co_paid' % COACH_PAID, 'if_flag %d co_open' % COACH_OPEN, 'set_flag %d' % COACH_OPEN]
+        o += say('Coach Crab', "You! Stop slouching. This planet's gravity is ten times Earth's, and you're still walking like you're on holiday.")
+        o += say('Coach Crab', "Three of my Gravity Ghosts are loose. Catch them. It builds character. I've got loads, and look at me.") + say('goku', "You're a crab.") + say('Coach Crab', "Exactly.") + ['stop', 'label co_open']
+        o += say('Coach Crab', "Still ghosts out there! And pick your knees up, sideways is the only way to walk!") + ['stop', 'label co_paid']
+        o += say('Coach Crab', "You've graduated. Your diploma is that you may now leave.") + ['stop']
+        o += ['list side_elder', 'set_flag 895', 'if_flag %d el_paid' % ELDER_PAID, 'set_flag %d' % ELDER_PAID]
+        o += say('Village Elder', "Those saplings you saved have sprouted! We've got a shop now. It sells saplings. It's not a good business plan, but we are very proud.")
+        o += say('Village Elder', "Here. Take these for your trouble. We grew them ourselves, somehow.") + ['do call 194 %d' % self.st.bal.quest_exp(ELDER['area'], True), 'do call 128 11', 'do call 128 11', 'do call 128 11', 'stop', 'label el_paid']
+        o += say('Village Elder', "Business is terrible! Isn't it wonderful? We've never had a business before.") + ['stop']
+        o += ['list side_announcer', 'set_flag 895']
+        for i, m in enumerate(REMATCHES):
+            o += ['if_flag %d rm%d' % (RM_KILLED + i, i), 'if_flag %d rw%d' % (RM_OPEN + i, i), 'set_flag %d' % (RM_OPEN + i)]
+            o += say('Announcer', "Welcome to the Kame Island Invitational! Today's challenger, back by no popular demand: %s! Over on the beach, please." % m['name']) + say(None, m['line']) + ['stop', 'label rw%d' % i]
+            o += say('Announcer', "Your opponent's waiting on the beach, and I'm paid by the hour, so take your time.") + ['stop', 'label rm%d' % i]
+        o += say('Announcer', "That's everyone! The tournament is over, and I've just been told the prize was exposure. Thanks for coming!") + ['stop']
+        return o
+
+    def more_checks(self):
+        o = ['if_flag %d sc_co' % COACH_PAID] + ['unless_flag %d sc_co' % (COACH_KILLED + i) for i in range(len(COACH['foes']))] + ['set_flag %d' % COACH_PAID]
+        o += say('Coach Crab', "Ha! That's the last ghost! Here, take these weights. I can't lift them, on account of being a crab.") + ['do call 194 %d' % self.st.bal.quest_exp(COACH['area'], True), 'do call 147 %d' % COACH['gear'], 'label sc_co']
+        for i, e in enumerate(ELITES):
+            o += ['if_flag %d sc_e%d' % (ELITE_PAID + i, i), 'unless_flag %d sc_e%d' % (ELITE_KILLED + i, i), 'set_flag %d' % (ELITE_PAID + i)] + say(None, e['paid']) + ['do call 194 %d' % self.st.bal.quest_exp(e['area'], True)] + (['do call 147 %d' % e['gear']] if e['gear'] else []) + ['label sc_e%d' % i]
+        for i, m in enumerate(REMATCHES):
+            o += ['if_flag %d sc_r%d' % (RM_PAID + i, i), 'unless_flag %d sc_r%d' % (RM_KILLED + i, i), 'set_flag %d' % (RM_PAID + i)] + say('Announcer', "And %s is down! Talk to me when you're ready for the next one." % m['name']) + ['do call 194 %d' % self.st.bal.quest_exp(41, True)] + (['do call 147 %d' % m['gear']] if m.get('gear') else []) + ['label sc_r%d' % i]
+        return o
 
     def install(self, n, a, fits, r, actors, put, named, spawns, foes_out, follows, walkins, foe_i, BF_IDX, cond_code):
         """Adds this area's side content to the build's tables. Returns the next enemy index."""
@@ -115,4 +177,23 @@ class Side:
             walkins.append((n, 40, 672, 112, 744, named['side_deliver']))
             x, y = spot(*STEVE['at']); death = put(__import__('scenes').assemble('call 29 %d; call 29 893' % STEVE_DEAD, {}) + b'\x11'); row = actors.row(STEVE['sprite'], death, True, None, n, True, 3)
             spawns.append((STEVE_OPEN, n, put(struct.pack('<8I', 0x0800FD55, 0, row, (y << 16) | x, actors.actor(STEVE['sprite'], True), 0x080555A0, 1, 0x080716EC)), 0, STEVE_DEAD))
+        def foe(sprite, x, y, cond, kill, extra=0, boss=True, level_area=None):
+            nonlocal foe_i
+            x, y = spot(x, y); death = put(__import__('scenes').assemble('call 29 %d; call 29 893' % kill, {}) + b'\x11'); row = actors.row(sprite, death, True, None, level_area if level_area is not None else n, boss, extra)
+            foes_out.append((n, foe_i, x, y, put(struct.pack('<8I', 0x0800FD55, put(cond_code(cond) + b'\x11'), row, (y << 16) | x, actors.actor(sprite, True), 0x080555A0, 1, 0x080716EC)))); foe_i += 1
+        def npc(d, talk):
+            x, y = spot(*d['at']); rec, _ = npc_rec(d['sprite'], x, y, named[talk]); spawns.append((d['after'], n, rec, 0, 0))
+        if n == BUTLER['area']:
+            npc(BUTLER, 'side_butler')
+            for i, (at, _) in enumerate(SLIPPERS):
+                x, y = spot(*at); walkins.append((n, x - 12, y - 12, x + 28, y + 20, named['side_slip%d' % i]))
+        if n == COACH['area']:
+            npc(COACH, 'side_coach')
+            for i, at in enumerate(COACH['foes']): foe(COACH['enemy'], at[0], at[1], 'set:%d & clear:%d' % (COACH_OPEN, COACH_KILLED + i), COACH_KILLED + i, 2, False)
+        for i, e in enumerate(ELITES):
+            if e['area'] == n: foe(e['sprite'], e['at'][0], e['at'][1], 'set:%d & clear:%d' % (AFTER_ELITES, ELITE_KILLED + i), ELITE_KILLED + i, 4, True)
+        if n == ELDER['area']: npc(ELDER, 'side_elder')
+        if n == ANNOUNCER['area']:
+            npc(ANNOUNCER, 'side_announcer')
+            for i, m in enumerate(REMATCHES): foe(m['sprite'], m['at'][0], m['at'][1], 'set:%d & clear:%d' % (RM_OPEN + i, RM_KILLED + i), RM_KILLED + i, m['extra'], True, 41)
         return foe_i

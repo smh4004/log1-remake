@@ -7,11 +7,16 @@ import csv, os, struct, sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path[:0] = [os.path.join(ROOT, 'tools'), os.path.join(ROOT, 'vendor', 'gero-tools', 'tools')]
 import log1_sprites as S, sprites  # noqa: E402
+ROWS, ST_REFS = 256, (0xFCE4, 0xFD70, 0x1BA90, 0x24F28, 0x279DC, 0x2CD18, 0x2F5E4, 0x32D3C, 0x335B8, 0x39BD4, 0x39D90, 0x3A384, 0x3A698)
 BB = 0x08000000; ST = 0x711274; T_NPC, T_ENEMY = 152, 25; COUNT = 298
 
 
 class Actors:
     def __init__(self, r, log1_rom, log1_dir, at):
+        # the enemy stat table only has room for 150 rows, so it moves to a bigger one
+        self.st = len(r); r.extend(r[ST:ST + 150 * 28]); r.extend(bytes((ROWS - 150) * 28))
+        for ref in ST_REFS:
+            assert struct.unpack_from('<I', r, ref)[0] == BB + ST; struct.pack_into('<I', r, ref, BB + self.st)
         self.r, self.log1 = r, log1_rom; self.names = [l.split()[1] for l in open(log1_dir + '/assets/areas/SPRITES.txt')]
         self.table = list(struct.unpack_from('<%dI' % COUNT, r, sprites.ACTOR_LIST)); self.at = at; self.ins = sprites.Inserter(r, at + 4 * 512); self.ids = {}; self.missing = []
         self.enemies = {e['name']: e for e in csv.DictReader(open(log1_dir + '/assets/tables/enemies.csv'))}; self.rows = {}; self.next_row = 60
@@ -50,7 +55,7 @@ class Actors:
         if key in self.rows: return self.rows[key]
         R = bytearray(self.r[ST + 8 * 28:ST + 9 * 28]); lv, hp, exp, a, p, e = self.bal.enemy(area, boss, extra)
         struct.pack_into('<II', R, 0, 0 if no_exp else exp, hp_set or hp); R[0xC:0x10] = bytes((min(lv, 255), a, p, e)); struct.pack_into('<I', R, 0x18, death)
-        k = self.next_row; self.next_row += 1; assert k < 150, 'enemy rows'; self.r[ST + k * 28:ST + (k + 1) * 28] = R; self.rows[key] = k; return k
+        k = self.next_row; self.next_row += 1; assert k < ROWS, 'enemy rows'; self.r[self.st + k * 28:self.st + (k + 1) * 28] = R; self.rows[key] = k; return k
 
     def finish(self):
         self.r[self.at:self.at + 4 * len(self.table)] = struct.pack('<%dI' % len(self.table), *self.table)
