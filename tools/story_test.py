@@ -10,13 +10,18 @@ pointers go stale, so it boots fresh, restores game data (flags, inventory, EXP)
 A death reloads the last checkpoint and tries the quest again. Run a full pass without RESUME from time to time, as resumed runs skip the earlier quests.
 """
 import collections, hashlib, json, os, re, shutil, struct, subprocess, sys
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__))); H = os.path.join(ROOT, 'vendor', 'gero-tools', 'tools', 'harness')
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__))); H = os.environ.get('HARNESS') or os.path.join(ROOT, 'out', 'harness')
 rom, D, L, first, last = sys.argv[1:6]; first, last = int(first), int(last); ROM = open(rom, 'rb').read(); BASE = 0x030010BD; QF, TF = 420, 500; cur = ['start']
 names = [l.split()[1] for l in open(L + '/assets/areas/SPRITES.txt')]; Q = json.load(open(L + '/assets/story/quests.json'))['quests']; IDS = sorted(int(f[4:6]) for f in os.listdir(L + '/assets/areas') if re.match(r'area\d\d\.json', f) and (int(f[4:6]) != 29 or not os.path.exists(L + '/assets/areas/area42.json')))
 AREAS = {n: json.load(open('%s/assets/areas/area%02d.json' % (L, n))) for n in IDS}
 sys.path[:0] = [os.path.join(ROOT, 'tools'), os.path.join(ROOT, 'vendor', 'gero-tools', 'tools')]
 import map_convert as C  # noqa: E402
 WALK = {n: C.Area(L, n).L['walkable'] > 0 for n in IDS}; FLY = {n: C.Area(L, n).L['flyable'] > 0 for n in IDS}
+
+
+BLANK = os.path.join(D, 'blank.sav')
+if not os.path.exists(BLANK): open(BLANK, 'wb').write(b'\xff' * 8192)   # what an emulator gives a new game; never test with an all-zero save
+os.environ['SAVEF'] = BLANK
 
 
 def run(l):
@@ -71,7 +76,7 @@ LISTS = json.load(open(rom[:-4] + '.lists.json')) if os.path.exists(rom[:-4] + '
 def warp(to):
     """Test list: go straight to an area, for quests whose real route was played before the resume."""
     if str(to) not in LISTS: return False
-    step(['w8 %08x %02x' % (0x0203FF7C + i, b) for i, b in enumerate(struct.pack('<I', LISTS[str(to)]))] + ['150'])
+    step(['w8 %08x %02x' % (0x0300617C + i, b) for i, b in enumerate(struct.pack('<I', LISTS[str(to)]))] + ['150'])
     return area() == to
 
 

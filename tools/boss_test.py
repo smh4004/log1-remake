@@ -15,7 +15,7 @@ def ohp(o): run(['dump _o %08x 8' % o]); return struct.unpack_from('<I', rd('_o'
 def hp(): run(['dump _g 03001576 2']); return struct.unpack('<H', rd('_g'))[0]
 def level_up(n):
     """Give Goku the EXP this area expects through the game's own native, so level-ups run for real, then spend the points."""
-    step(['w8 %08x %02x' % (0x0203FF7C + i, b) for i, b in enumerate(struct.pack('<I', LISTS['x%d' % n]))] + ['60']); free(60); spend_points(); run(['dump _g 03001576 2']); return struct.unpack('<H', rd('_g'))[0]
+    step(['w8 %08x %02x' % (0x0300617C + i, b) for i, b in enumerate(struct.pack('<I', LISTS['x%d' % n]))] + ['60']); free(60); spend_points(); run(['dump _g 03001576 2']); return struct.unpack('<H', rd('_g'))[0]
 base = cur[0]; done = set(); rows = []
 for x in Q:
     for a in x['actions']:

@@ -2,20 +2,24 @@
  * Flying swaps the collision pointers so the player uses the map's air mask. Landing needs walkable floor below.
  * Area loads always write the floor mask to the first pointer, so a new area cancels flying. */
 typedef unsigned char u8; typedef unsigned short u16; typedef unsigned int u32;
+/* Hook RAM is 0x03005F00-0x030061FF in IWRAM. It must stay out of the top of EWRAM: 0x0203E000-0x0203FFFF is the game's save buffer. */
+#define INIT_AT ((volatile unsigned *)0x03005F00)
+#define INIT_MAGIC (*(volatile unsigned *)0x030061F8)
+static void ram_init(void) { if (INIT_MAGIC == 0x31474F4C) return; for (int i = 0; i < 0x300 / 4; i++) INIT_AT[i] = 0; INIT_MAGIC = 0x31474F4C; }
 #define KEYS   (*(volatile u16 *)0x04000130)
 #define FLOOR  (*(volatile u32 *)0x03001A4C)
 #define AIR    (*(volatile u32 *)0x03001A50)
 #define AREA   (*(volatile u32 *)0x03001980)
 #define PLAYER (*(volatile u32 *)0x03001C34)
-#define STATE  ((volatile u8 *)0x0203FF04)   /* 0 R held, 1 flying, 2 L held */
-#define LAST   (*(volatile u32 *)0x0203FF08)
+#define STATE  ((volatile u8 *)0x03006104)   /* 0 R held, 1 flying, 2 L held */
+#define LAST   (*(volatile u32 *)0x03006108)
 #define KEY_R  0x100
 typedef void (*fn2)(void *, u32); typedef void (*fn0)(void);
 
 /* Live spawn: table of {flag, area entry, record or 0, NPC to remove}, ending in flag 0. When a flag becomes set in that area, the enemy
  * record is created as the area loader would (fn(record, index), then added to the object list). Each runs once per visit. */
 #define FLAGS  ((volatile u8 *)0x030010BD)
-#define DONE   ((volatile u8 *)0x0203FF10)   /* 32 bytes, one bit per table row */
+#define DONE   ((volatile u8 *)0x03006110)   /* 32 bytes, one bit per table row */
 #define OBJS   ((void *)0x03001C4C)
 typedef struct { u32 flag, area, record, remove, until; } spawn_t;   /* remove: NPC index to take away, 0 = none */
 /* patched by tools/build_flight.py; volatile so the compiler can't fold the empty initial table */
@@ -25,7 +29,7 @@ typedef void *(*spawn_fn)(void *, int); typedef void (*add_fn)(void *, void *); 
 /* Quest-driven collision changes: when a flag is set in that area, mark a tile rectangle walkable in the live floor mask. */
 typedef struct { u32 flag, area; u16 x1, y1, x2, y2; } walk_t;
 __attribute__((section(".text.table"))) volatile const walk_t walk_table[16] = {{0, 0, 0, 0, 0, 0}};
-#define WDONE  ((volatile u8 *)0x0203FF30)   /* 16 bytes */
+#define WDONE  ((volatile u8 *)0x03006130)   /* 16 bytes */
 
 /* NPCs stamp their 16x8 feet into the live masks, and removal leaves the stamp behind. */
 static void remove_npc(void *npc) {
@@ -41,9 +45,9 @@ static void remove_npc(void *npc) {
 typedef struct { u32 area; u16 flag, x, y; u32 rec; } pick_t;
 __attribute__((section(".text.table"))) volatile const u32 pick_ptr = 0;
 typedef struct { const pick_t *row; void *obj; } slot_t;
-#define SLOTS  ((slot_t *)0x0203FF40)         /* MAX_SLOTS entries */
+#define SLOTS  ((slot_t *)0x03006140)         /* MAX_SLOTS entries */
 #define MAX_SLOTS 6
-#define TICK   (*(volatile u8 *)0x0203FF70)
+#define TICK   (*(volatile u8 *)0x03006170)
 #define OBJ_N  (*(volatile u32 *)0x03001C50)
 #define MASKS  ((u8 *volatile *)0x03001A4C)
 
@@ -84,9 +88,9 @@ static void live_pick(int new_area) {
  * ending in area 0. One that leaves the object list has died and stays dead for this visit (DEAD holds one bit per index). */
 __attribute__((section(".text.table"))) volatile const u32 foe_ptr = 0;
 typedef struct { const pick_t *row; void *obj; } fslot_t;
-#define FOES   ((fslot_t *)0x0203FF80)
+#define FOES   ((fslot_t *)0x03006180)
 #define ESLOTS 14
-#define DEAD   ((volatile u8 *)0x0203FFF0)    /* 8 bytes */
+#define DEAD   ((volatile u8 *)0x030061F0)    /* 8 bytes */
 #define OBJ_AT ((void *volatile *)0x03001C54)
 typedef int (*cond_fn)(u32);
 #define COND_FN 0x08004785
@@ -121,7 +125,7 @@ static void live_foes(int new_area) {
 typedef struct { u32 area; short x1, y1, x2, y2; u16 dmg, mode; } hurt_t;
 __attribute__((section(".text.table"))) volatile const u32 zone_ptr = 0;
 #define HP (*(volatile int *)0x03001574)
-#define SECOND (*(volatile u8 *)0x0203FF71)
+#define SECOND (*(volatile u8 *)0x03006171)
 
 static void live_hurt(void) {
     if (!PLAYER || ++SECOND < 60) return;
@@ -136,7 +140,7 @@ static void live_hurt(void) {
 /* A story enemy's death script sets flag 893. This runs quest_check as an exit zone would (sub_080073F0): the script reads +0x10 and +0x14 of its zone object. */
 __attribute__((section(".text.table"))) volatile const u32 check_ptr = 0;
 #define PENDING 893
-#define DEBUG_LIST (*(volatile u32 *)0x0203FF7C)   /* the test bot writes a list pointer here to warp; nothing in the game does */
+#define DEBUG_LIST (*(volatile u32 *)0x0300617C)   /* the test bot writes a list pointer here to warp; nothing in the game does */
 static void live_pending(void) {
     if (!PLAYER || !(FLAGS[PENDING >> 3] >> (PENDING & 7) & 1)) return;
     FLAGS[PENDING >> 3] &= ~(1 << (PENDING & 7));
@@ -147,10 +151,10 @@ static void live_pending(void) {
 /* Someone following the player: table of {start flag, end flag, record}, ending in flag 0. They trail the player by TRAIL frames, in every area. */
 typedef struct { u32 start, end, rec; } follow_t;
 __attribute__((section(".text.table"))) volatile const u32 follow_ptr = 0;
-#define FOLLOW (*(void *volatile *)0x0203FF74)
-#define FROW   (*(const follow_t *volatile *)0x0203FF78)
-#define TRAIL_AT ((volatile int *)0x0203FE00)         /* 32 x,y pairs */
-#define TRAIL  (*(volatile u8 *)0x0203FF72)
+#define FOLLOW (*(void *volatile *)0x03006174)
+#define FROW   (*(const follow_t *volatile *)0x03006178)
+#define TRAIL_AT ((volatile int *)0x03006000)         /* 32 x,y pairs */
+#define TRAIL  (*(volatile u8 *)0x03006172)
 static void live_follow(int new_area) {
     if (new_area) { FOLLOW = 0; FROW = 0; TRAIL = 0; return; }
     if (!PLAYER) return;
@@ -179,9 +183,9 @@ static void live_follow(int new_area) {
  * A list runs when the player steps into its rectangle, as an exit zone's would. Up to 128 rows per area. */
 typedef struct { u32 area; u16 x0, y0, x1, y1; u32 list; } zone_t;
 __attribute__((section(".text.table"))) volatile const u32 walkin_ptr = 0;
-#define ZFIRST (*(const zone_t *volatile *)0x0203FD00)
-#define ZINSIDE ((volatile u8 *)0x0203FD04)      /* 16 bytes */
-#define ZBUSY  (*(volatile u8 *)0x0203FD14)
+#define ZFIRST (*(const zone_t *volatile *)0x03005F00)
+#define ZINSIDE ((volatile u8 *)0x03005F04)      /* 16 bytes */
+#define ZBUSY  (*(volatile u8 *)0x03005F14)
 static void live_zones(int new_area) {
     const zone_t *z = ZFIRST;
     if (new_area) {
@@ -269,6 +273,7 @@ void flight_draw(int list) {
 }
 
 void flight_keys(u8 *st) {
+    ram_init();
     u32 k = ~(u32)KEYS & 0xFFFF;
     ((fn2)0x0804023D)(st, k);
     if (!(~*(u16 *)(st + 2) & 0xF) && st[1] && (*(u16 *)(st + 4) & 0xF)) ((fn0)0x0803FA0D)();
