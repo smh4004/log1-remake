@@ -13,6 +13,8 @@ import log1_side  # noqa: E402
 
 QF, TF, EF, TOK, NOOP = 420, 500, 620, 870, 895
 PIC_SAVE, PIC_BACK, PIC_FIRST = 896, 897, 54                            # src/flight.c and log1_split: story pictures
+FLASH_FLAG, MOVIE_FLAG, SPAWN_FLAG = 898, 899, 901                       # src/flight.c: cutscene flash, the two movies, characters that appear mid-scene
+MOVIE_LISTS = {0x084E4F20: 0, 0x081CA144: 1}                             # LoG1's lists that play a movie -> src/flight.c's movie
 import log1_music  # noqa: E402
 MUSIC_BASE = 53                                        # log1_music.BASE: LoG1's songs follow Buu's Fury's 53
 EV, PENDING = 720, 893   # one-shot event flags; a story enemy died, so the map-wide zone should run quest_check
@@ -42,7 +44,7 @@ class Story:
         self.sets = conversations(log1); self.names = [l.split()[1] for l in open(log1 + '/assets/areas/SPRITES.txt')]
         d = json.load(open(log1 + '/assets/story/quests.json')); self.q = [x for x in d['quests'] if x['quest'] <= last_quest]; self.qof = d['quest_of_flag']
         self.ids, self.por = set(ids), portraits or {}; self.scenes = {s['scene']: s for s in json.load(open(scenes_json))}
-        self.out = []; self.doors = collections.defaultdict(list); self.walks = []; self.hostile = {}; self.deaths = {}; self.log = collections.Counter(); self.state = {}
+        self.scene_spawns = []; self.out = []; self.doors = collections.defaultdict(list); self.walks = []; self.hostile = {}; self.deaths = {}; self.log = collections.Counter(); self.state = {}
         self.pick = {}; self.area_sets = set()
         for n in ids:
             for a in json.load(open('%s/assets/areas/area%02d.json' % (log1, n)))['actors']:
@@ -140,15 +142,51 @@ class Story:
         return next((a for a in self.areas[area]['actors'] if a['kind'] != 2 and a['sprite'] == name and a['show'] == 0), None)
 
     def scene(self, i, area=None):
-        """Plays a cutscene's conversations and its walks between characters on the map. Other commands (animation, effects, sound, camera) are counted, not played."""
-        r = []; pic = False
-        for c in self.scenes[i]['commands']:
+        """Plays a cutscene: dialogue, walks, pictures, movies, music, sound effects, fades, flashes and characters appearing. Special animations and sprite swaps are counted, not played."""
+        r = []; pic = dark = False; cmds = self.scenes[i]['commands']
+        if area is None: area = self.home_area(i)
+        def back():
+            sx, sy = self.areas[area]['start'] if area in self.areas else (8, 8)
+            return 'do call 120 15; call 119 26 %d 1 %d %d; call 29 %d; call 136 2; call 121 15' % ((area or 0) + 1, sx, sy, PIC_BACK)
+        def light():
+            nonlocal dark
+            if dark and not pic: r.append('do call 121 15')
+            dark = False
+        for k, c in enumerate(cmds):
             b = bytes.fromhex(c['raw']); f = c['fn']
-            if f == '0800CC61': r += self.say(chain(self.sets[b[0]], b[1])[0]); continue
+            if f == '0800CC61': light(); r += self.say(chain(self.sets[b[0]], b[1])[0]); continue
             if f == '0800CC75':                                  # a full-screen picture; the dialogue that follows draws over it
-                r.append('do ' + ('call 29 %d; call 136 2; ' % PIC_SAVE if not pic else '') + 'call 120 15; call 119 26 %d 1 8 8; call 121 15' % (PIC_FIRST + b[0] + 1)); pic = True; continue
+                if k and cmds[k - 1]['fn'] == '0800CA69' and bytes.fromhex(cmds[k - 1]['raw'])[:4] and b[0] == getattr(self, '_after_movie', None): self._after_movie = None; continue
+                r.append('do ' + ('call 29 %d; call 136 2; ' % PIC_SAVE if not pic else '') + 'call 120 15; call 119 26 %d 1 8 8; call 121 15' % (PIC_FIRST + b[0] + 1)); pic = True; dark = False
+                nxt = next((x['fn'] for x in cmds[k + 1:] if x['fn'] != '0800D26D'), None)
+                if nxt != '0800CC61': r.append('do call 136 150')
+                continue
+            if f == '0800E065':                                  # back to the map
+                if pic: r.append(back()); pic = False
+                continue
+            if f == '0800CA69':                                  # a movie, then whatever comes next as a backdrop for its closing text
+                m = MOVIE_LISTS[struct.unpack_from('<I', b)[0]]; nx = next((x for x in cmds[k + 1:] if x['fn'] == '0800CC75'), None)
+                r.append('do ' + ('call 29 %d; call 136 2; ' % PIC_SAVE if not pic else '') + 'call 120 1; call 29 %d; call 136 4' % (MOVIE_FLAG + m)); pic = True
+                if nx is not None: self._after_movie = bytes.fromhex(nx['raw'])[0]; r.append('do call 119 26 %d 1 8 8; call 121 15' % (PIC_FIRST + self._after_movie + 1))
+                else: r.append(back()); pic = False
+                dark = False; continue
             if f == '0800E079': r.append('do call 35 %d' % (MUSIC_BASE + b[0])); continue
             if f == '0800D26D': r.append('do call 31 %d' % (log1_music.SFX_BASE + struct.unpack_from('<I', b)[0])); continue
+            if f == '0800CD29':                                  # fade to black
+                if not dark: r.append('do call 120 64'); dark = True
+                continue
+            if f == '0800CDAF': r.append('do call 29 %d; call 136 30' % FLASH_FLAG); continue    # a white flash
+            if f == '0800CC03': r.append('do call 136 20'); continue                            # LoG1 pans the camera here
+            if f in ('0800CAC9', '0800CDF5'):                    # a character appears, standing where their first walk would take them
+                who = struct.unpack_from('<H', b, 4)[0]; x, y = struct.unpack_from('<HH', b, 0); nm = self.names[who] if who < len(self.names) else None
+                if f == '0800CDF5':
+                    near = self.movable(area, struct.unpack_from('<H', b, 0x10)[0]) if len(b) >= 0x18 else None
+                    if near and near.get('x') is not None: x, y = near['x'] + struct.unpack_from('<h', b, 0x14)[0], near['y'] + struct.unpack_from('<h', b, 0x16)[0]
+                for later in cmds[k + 1:]:
+                    lb = bytes.fromhex(later['raw'])
+                    if later['fn'] == '0800CB25' and lb[0] == who: x, y = struct.unpack_from('<HH', lb, 4); break
+                if nm and area in self.areas and x and y:
+                    flag = SPAWN_FLAG + 2 * len(self.scene_spawns); self.scene_spawns.append((area, flag, nm, x, y, flag + 1)); light(); r.append('do call 29 %d; call 136 10' % flag); self._scene_end = getattr(self, '_scene_end', []) + [flag + 1]; continue
             if f == '0800DF15':                                  # the closing text
                 a_ = struct.unpack_from('<I', b)[0] & 0x1FFFFFF; r += ['narrate ' + p for p in split_line(self.rom[a_:self.rom.index(b'\0', a_)].decode('latin1').replace('{', '(').replace('}', ')').strip())]; continue
             if f == '0800CB25' or f == '0800D9C5':
@@ -159,14 +197,25 @@ class Story:
                     if not o or o['x'] is None: a = None                # no fixed spot to walk to
                     else: x, y = o['x'] + struct.unpack_from('<h', b, 4)[0], o['y'] + struct.unpack_from('<h', b, 6)[0]
                 if a:
-                    nm = self.names[b[0]]
+                    light(); nm = self.names[b[0]]
                     if nm == 'goku': r.append('do call 56; call 96 0 %d %d; call 58' % (x, y)); continue
                     self.move_names.add(nm); r.append('do call 56; call 96 %s %d %d; call 58' % (nm, x, y)); continue
             self.log['scene command skipped'] += 1
-        if pic:                                                  # back to the map, where the player was (src/flight.c)
-            sx, sy = self.areas[area]['start'] if area in self.areas else (8, 8)
-            r.append('do call 120 15; call 119 26 %d 1 %d %d; call 29 %d; call 136 2; call 121 15' % ((area if area is not None else 0) + 1, sx, sy, PIC_BACK))
+        if pic: r.append(back())
+        elif dark: r.append('do call 121 15')
+        for fl in getattr(self, '_scene_end', []): r.append('do call 29 %d' % fl)
+        self._scene_end = []
         return r
+
+    def home_area(self, i):
+        """The area a scene with no task area plays in: where its first character stands."""
+        for c in self.scenes[i]['commands']:
+            b = bytes.fromhex(c['raw'])
+            if c['fn'] in ('0800CB25', '0800CA75', '0800D9C5', '0800CC03') and b:
+                nm = self.names[b[0]] if b[0] < len(self.names) else None
+                for n, a in self.areas.items():
+                    if any(x['sprite'] == nm for x in a['actors']): return n
+        return None
 
     def actions(self, x):
         r = []; area = next((t['area'] for t in x['tasks'] if t.get('area', 255) != 255), None); zones = {(a['x1'], a['y1'], a['x2'], a['y2']): a['scene'] for a in x['actions'] if a['type'] == 'add_scene_zone'}

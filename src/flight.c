@@ -279,11 +279,22 @@ void flight_draw(int list) {
 #define PX (*(volatile int *)0x03005F18)
 #define PY (*(volatile int *)0x03005F1C)
 #define DISPCNT (*(volatile u16 *)0x04000000)
+#define FLASH_FLAG 898
+#define MOVIE_FLAG 899
+#define BLDCNT_ (*(volatile u16 *)0x04000050)
+#define BLDY_ (*(volatile u16 *)0x04000054)
+#define FLASH_LEFT (*(volatile u8 *)0x03005F20)
+#define BLD_KEEP (*(volatile u16 *)0x03005F22)
 static void live_pictures(void) {
     if (!PLAYER) return;
     if (FLAGS[PIC_SAVE >> 3] >> (PIC_SAVE & 7) & 1) { FLAGS[PIC_SAVE >> 3] &= ~(1 << (PIC_SAVE & 7)); PX = *(int *)(PLAYER + 0x1A0); PY = *(int *)(PLAYER + 0x1A4); }
     if (FLAGS[PIC_BACK >> 3] >> (PIC_BACK & 7) & 1) { FLAGS[PIC_BACK >> 3] &= ~(1 << (PIC_BACK & 7)); *(int *)(PLAYER + 0x1A0) = PX; *(int *)(PLAYER + 0x1A4) = PY; }
     if (AREA && *(u8 *)AREA == 26 && *(u8 *)(AREA + 1) >= PIC_FIRST) DISPCNT &= ~0x1000;
+    if (FLAGS[FLASH_FLAG >> 3] >> (FLASH_FLAG & 7) & 1) { FLAGS[FLASH_FLAG >> 3] &= ~(1 << (FLASH_FLAG & 7)); FLASH_LEFT = 30; BLD_KEEP = BLDCNT_; BLDCNT_ = 0xBF; }
+    if (FLASH_LEFT) { FLASH_LEFT--; BLDY_ = FLASH_LEFT >= 15 ? 16 : FLASH_LEFT; if (!FLASH_LEFT) { BLDCNT_ = BLD_KEEP; BLDY_ = 0; } }
+    for (int m = 0; m < 2; m++) if (FLAGS[(MOVIE_FLAG + m) >> 3] >> ((MOVIE_FLAG + m) & 7) & 1) {
+        FLAGS[(MOVIE_FLAG + m) >> 3] &= ~(1 << ((MOVIE_FLAG + m) & 7)); ((void (*)(u32))PLAY_MOVIE)(m ? MOVIE_B : MOVIE_A);
+    }
 }
 
 void flight_keys(u8 *st) {

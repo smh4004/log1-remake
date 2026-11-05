@@ -118,6 +118,9 @@ def build(r, log1, ids, story, named, actors):
                 elif t['type'] == 'escort' and t['area'] == n:
                     sp = story.names[t['follower']]; idx = BF_IDX.get(sp) or actors.actor(sp, False)
                     offs.append(len(recs)); recs += struct.pack('<9I', 0x0800A223, 0x32, 0x08017DA3, 0x10000 | (story.TF + t['id']), (t['y'] << 16) | t['x'], named.get('talk_set%02d' % t['after_set'], 0), idx, 1, 0)
+        for sa, flag, nm, sx, sy, end in story.scene_spawns:                      # characters that appear during a cutscene
+            if sa == n:
+                idx = BF_IDX.get(nm) or actors.actor(nm, False); rec_ = put(struct.pack('<9I', 0x0800A223, 0x32, 0x08017DA3, 0x20002, (sy << 16) | sx, named['no_talk'], idx, 1, 0)); spawns.append((flag, n, rec_, 0, end))
         # pickups stream in (src/flight.c): an object 8 px below LoG1's spot, as its frame is bottom-centred
         def item(i, x, y, f):
             rec = put(struct.pack('<9I', 0x0800A223, 0x32, 0x08017DA3, 0x20002, ((y + 8) << 16) | x, named['no_talk'], actors.pickup(i), 1, 0)); struct.pack_into('<I', r, rec - BB + 32, rec); picks.append((n, f, x, y + 8, rec + 8))

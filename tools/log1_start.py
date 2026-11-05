@@ -4,10 +4,12 @@ Screens go in as plain mode 4 pictures, and the boot code (src/boot.c) runs befo
 """
 import os, struct, subprocess, tempfile
 from PIL import Image
+import build_flight
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 B = 0x08000000
 LEGAL, INFOGRAMES, WEBFOOT, SPLASH, TITLE = 0x1C7B50, 0xFE4C, 0xFE58, 0x4DEDD8, 0x19BCDC   # image headers {palette, pixels, flags} in LoG1: the logo title, then the one behind Press Start
 MOVIE = 0x337248                                                       # the boot movie
+STORY_MOVIES = (0x4E4F44, 0x1CA168)                                    # the two played in the story, by scene 11 and scene 21
 TITLE_SONG, MOVIE_SONG = 15, 17                                        # LoG1's song numbers
 BF_TITLE_TRACK, TRACK_BASE, TABLE_REF = 45, 53, 0x8F8
 MENU_X, MENU_Y = (0x524A, 0x5284), ((0x5256, 88), (0x5294, 102))        # the title menu's position, moved to where LoG1 has Press Start
@@ -69,6 +71,7 @@ def install(r, log1, L, menu):
     for o in MENU_X: r[o] = 75
     for o, y in MENU_Y: r[o] = y
     size = struct.unpack_from('<I', log1, MOVIE)[0]; assert struct.unpack_from('<H', log1, MOVIE + 4)[0] == 0xAF11; movie = put(log1[MOVIE:MOVIE + size])
+    mv = [put(log1[o:o + struct.unpack_from('<I', log1, o)[0]]) for o in STORY_MOVIES]
     # Boot code
     while len(r) % 4: r.append(0)
     at = len(r); d = tempfile.mkdtemp(); o, e, b = (os.path.join(d, n) for n in ('b.o', 'b.elf', 'b.bin'))
@@ -76,6 +79,8 @@ def install(r, log1, L, menu):
     subprocess.check_call(['arm-none-eabi-gcc', '-mthumb', '-mcpu=arm7tdmi', '-nostdlib', '-Wl,-Ttext=0x%X' % (B + at), '-Wl,-e,boot_entry', o, '-lgcc', '-o', e])
     subprocess.check_call(['arm-none-eabi-objcopy', '-O', 'binary', '-j', '.text', e, b]); r.extend(open(b, 'rb').read())
     entry = int(next(l.split()[0] for l in subprocess.check_output(['arm-none-eabi-nm', e]).decode().splitlines() if l.endswith('boot_entry')), 16)
+    play = int(next(l.split()[0] for l in subprocess.check_output(['arm-none-eabi-nm', e]).decode().splitlines() if l.endswith('play_movie')), 16) | 1
+    build_flight.EXTRA[:] = ['-DPLAY_MOVIE=0x%X' % play, '-DMOVIE_A=0x%X' % mv[0], '-DMOVIE_B=0x%X' % mv[1]]
     # main: skip Buu's Fury's first logo, and run this in place of the rest of them
     nop(r, 0x41A6, 5)
     struct.pack_into('<HHHI', r, 0x41D2, 0x4B01, 0x4718, 0x46C0, entry | 1)

@@ -2,13 +2,14 @@
 import os, struct, subprocess, sys, tempfile
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ENTRY, CODE, DRAW = 0x3D4A0, 0xBF0000, 0x1157E
+EXTRA = []                                                             # -D flags from log1_start: addresses in the boot code and movies
 
 
 def install(rom, spawns=(), walks=(), picks=(), foes=(), zones=(), check=0, follows=(), fly=(), art=b'', marks=(), walkins=()):
     """spawns: up to 32 (flag, area entry bus address, record bus address, NPC index to remove or 0) rows for live_spawn."""
     assert len(spawns) <= 256 and len(walks) <= 16
     d = tempfile.mkdtemp(); o, e, b = (os.path.join(d, n) for n in ('f.o', 'f.elf', 'f.bin'))
-    subprocess.check_call(['arm-none-eabi-gcc', '-mthumb', '-mcpu=arm7tdmi', '-Os', '-ffreestanding', '-nostdlib', '-c', os.path.join(ROOT, 'src', 'flight.c'), '-o', o])
+    subprocess.check_call(['arm-none-eabi-gcc', '-mthumb', '-mcpu=arm7tdmi', '-Os', '-ffreestanding', '-nostdlib', *EXTRA, '-c', os.path.join(ROOT, 'src', 'flight.c'), '-o', o])
     subprocess.check_call(['arm-none-eabi-gcc', '-mthumb', '-mcpu=arm7tdmi', '-nostdlib', '-Wl,-Ttext=0x%X' % (0x08000000 + CODE), '-Wl,-e,flight_keys', '-Wl,--undefined=flight_draw', o, '-lgcc', '-o', e])
     subprocess.check_call(['arm-none-eabi-objcopy', '-O', 'binary', '-j', '.text', e, b])
     code = open(b, 'rb').read(); assert len(code) < 0x1000
