@@ -126,14 +126,14 @@ def travel(to):
 
 def land():
     """Back on foot, so later walks use the floor mask. A new area cancels flying by itself."""
-    run(['dump _s 0203ff05 1'])
+    run(['dump _s 03006105 1'])
     if rd('_s')[0]: step(['4 R', '20'])
 
 
 def fly_into(n, rect, done):
     """Zones only flight reaches, like the top of area 3: take off (R), then cross into the zone from each clear side."""
     x0, y0, x1, y1 = [max(0, v) for v in rect]; F = FLY[n]
-    run(['dump _s 0203ff05 1'])
+    run(['dump _s 03006105 1'])
     if not rd('_s')[0]: step(['4 R', '20'])
     for k, dx, dy in DIRS:
         sx, sy = (x0 + x1) // 2 - 8 + dx * ((x1 - x0) // 2 + 20), (y0 + y1) // 2 - 4 + dy * ((y1 - y0) // 2 + 20)
