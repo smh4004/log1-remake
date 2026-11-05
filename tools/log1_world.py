@@ -24,6 +24,7 @@ import scenes, worldmap  # noqa: E402
 VISIT, UI = 800, 1534
 NAMEK_AT = (3216, 420)                                              # open sea in the far north-east, away from every Buu's Fury place
 NAMEK_RECT = (NAMEK_AT[0] - 40, NAMEK_AT[1] - 40, NAMEK_AT[0] + 56, NAMEK_AT[1] + 56)
+MAP_SONG = 11                                                        # LoG1 plays this song when Goku leaves by Nimbus (quests 3 and 52), so it's its flying music
 MAP_RECORD = 0x2AD8BC                                                # 0:50's map: +0x24 billboard count, +0x28 records, +0x2C 8bpp graphic
 PLACES = [(0, 'roshi', "Roshi's Island"), (2, 'east_district', "Goku's House"), (4, 'fukurou', 'Forest'), (5, 'sw_forest', 'Village'), (9, 'nataday', 'Crash Site'),
           (15, 'lookout', "Kami's Lookout"), (17, 'west_city', 'City'), (22, 'pilaf', 'Military Base'), (23, 'diablo', 'Battlegrounds'), (24, 'airship', 'Namek')]
@@ -86,6 +87,7 @@ def install(r, log1, ids, world, at=0xAE0000):
     pos = spots(log1, ids, None); cfg = dict(locations=[dict(key=bf, bf=bf, ui=UI + i, rect=RECTS[bf], dests=[dict(when='set:%d' % (VISIT + n), to=[world, n + 1, *pos[n]])]) for i, (n, bf, name) in enumerate(PLACES) if n in pos])
     path = os.path.join(ROOT, 'out', 'slice', 'world.json'); json.dump(cfg, open(path, 'w'))
     worldmap.landing_code = landing_code; e = _entry_any(r, 0, 50); r[e + 4] = 0              # Buu's Fury's map enemies would be out of place and far too strong
+    struct.pack_into('<I', r, e + 0x24, 53 + MAP_SONG)
     res = worldmap.apply(r, path, at)
     add_namek(r, res[0], e)
     return res

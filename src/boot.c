@@ -107,14 +107,14 @@ void play_movie(const u8 *f) {
 typedef void (*song_fn)(void *, const void *);
 static void song(const void *s) { ((song_fn)0x0803F111)(**(void ***)0x0800420C, s); }
 void log1_boot(void) {
+    *(volatile u8 *)0x030038A9 = 0;                                     /* main has already started the title song, but the logos are silent in LoG1 */
     DISPCNT = 0x80; BG2PA = 0x100; BG2PB = 0; BG2PC = 0; BG2PD = 0x100; BG2X = 0; BG2Y = 0;
     BLDCNT = 0xC4; BLDY = 16; DISPCNT = 0x0404;
     for (const screen_t *p = screens; p->pal; p++) show(p);
     BG2PA = 0x80; BG2PD = 0x80;
-    song((const void *)MOVIE_SONG);
+    song((const void *)TITLE_SONG);                                     /* LoG1's title song starts with the movie and runs on through the title. Buu's Fury's title sees it already playing, so it doesn't restart */
     movie((const u8 *)MOVIE);
     BG2PA = 0x100; BG2PD = 0x100; show((const screen_t *)SPLASH);
-    song((const void *)TITLE_SONG);
     DISPCNT = 0x80; BLDCNT = 0; BLDY = 0;
 }
 __attribute__((naked)) void boot_entry(void) {

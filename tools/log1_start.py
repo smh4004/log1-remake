@@ -10,7 +10,8 @@ B = 0x08000000
 LEGAL, INFOGRAMES, WEBFOOT, SPLASH, TITLE = 0x1C7B50, 0xFE4C, 0xFE58, 0x4DEDD8, 0x19BCDC   # image headers {palette, pixels, flags} in LoG1: the logo title, then the one behind Press Start
 MOVIE = 0x337248                                                       # the boot movie
 STORY_MOVIES = (0x4E4F44, 0x1CA168)                                    # the two played in the story, by scene 11 and scene 21
-TITLE_SONG, MOVIE_SONG = 15, 17                                        # LoG1's song numbers
+TITLE_SONG, GAME_OVER_SONG = 15, 17                                    # LoG1's song numbers: 15 plays from the intro movie through the title, 17 on its game over screen (sub_08004D5C)
+BF_DEATH_TRACK = 8                                                     # the track Buu's Fury's "You have died!" script plays
 BF_TITLE_TRACK, TRACK_BASE, TABLE_REF = 45, 53, 0x8F8
 MENU_X, MENU_Y = (0x524A, 0x5284), ((0x5256, 88), (0x5294, 102))        # the title menu's position, moved to where LoG1 has Press Start
 BF_TITLE_PICS, BF_TITLE_PAL = (0x5414, 0x1E744, 0x1E9E0), 0x5458         # the title and menu screens' picture pointers, and the title's palette, in Buu's Fury
@@ -49,6 +50,7 @@ def install(r, log1, L, menu):
     # Title song
     table = struct.unpack_from('<I', r, TABLE_REF)[0] - B
     r[table + 20 * BF_TITLE_TRACK:table + 20 * BF_TITLE_TRACK + 20] = r[table + 20 * (TRACK_BASE + TITLE_SONG):table + 20 * (TRACK_BASE + TITLE_SONG) + 20]
+    r[table + 20 * BF_DEATH_TRACK:table + 20 * BF_DEATH_TRACK + 20] = r[table + 20 * (TRACK_BASE + GAME_OVER_SONG):table + 20 * (TRACK_BASE + GAME_OVER_SONG) + 20]
     # Title picture
     pal, pix = image(log1, gfx, TITLE); bf_pal = bytes(r[0x5652C:0x5652C + 512]); pal, pix = title_picture(pal, pix, bf_pal, menu)
     pic = put(struct.pack('<II', 0, len(pix)) + pix); struct.pack_into('<I', r, BF_TITLE_PAL, put(pal))
@@ -75,7 +77,7 @@ def install(r, log1, L, menu):
     # Boot code
     while len(r) % 4: r.append(0)
     at = len(r); d = tempfile.mkdtemp(); o, e, b = (os.path.join(d, n) for n in ('b.o', 'b.elf', 'b.bin'))
-    subprocess.check_call(['arm-none-eabi-gcc', '-mthumb', '-mcpu=arm7tdmi', '-Os', '-ffreestanding', '-nostdlib', '-DSCREENS=0x%X' % screens, '-DMOVIE=0x%X' % movie, '-DSPLASH=0x%X' % splash, '-DMOVIE_SONG=0x%X' % (B + table + 20 * (TRACK_BASE + MOVIE_SONG)), '-DTITLE_SONG=0x%X' % (B + table + 20 * BF_TITLE_TRACK), '-c', os.path.join(ROOT, 'src', 'boot.c'), '-o', o])
+    subprocess.check_call(['arm-none-eabi-gcc', '-mthumb', '-mcpu=arm7tdmi', '-Os', '-ffreestanding', '-nostdlib', '-DSCREENS=0x%X' % screens, '-DMOVIE=0x%X' % movie, '-DSPLASH=0x%X' % splash, '-DTITLE_SONG=0x%X' % (B + table + 20 * BF_TITLE_TRACK), '-c', os.path.join(ROOT, 'src', 'boot.c'), '-o', o])
     subprocess.check_call(['arm-none-eabi-gcc', '-mthumb', '-mcpu=arm7tdmi', '-nostdlib', '-Wl,-Ttext=0x%X' % (B + at), '-Wl,-e,boot_entry', o, '-lgcc', '-o', e])
     subprocess.check_call(['arm-none-eabi-objcopy', '-O', 'binary', '-j', '.text', e, b]); r.extend(open(b, 'rb').read())
     entry = int(next(l.split()[0] for l in subprocess.check_output(['arm-none-eabi-nm', e]).decode().splitlines() if l.endswith('boot_entry')), 16)
