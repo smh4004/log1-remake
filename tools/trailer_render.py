@@ -34,7 +34,7 @@ SHOTS = [
     (b(14), b(16), 'new_boot', 300, 'full', None, 0),
     (b(16), b(17), None, 0, 'black', 'AND FOR THE FIRST TIME', 92),
     (b(17), b(19), 'fly_area', 2, 'full', 'TAKE TO THE SKIES', 110),
-    (b(19), b(21), 'fly_map', 70, 'full', 'FLY THE WHOLE WORLD', 110),
+    (b(19), b(21), 'fly_map', 92, 'full', 'FLY THE WHOLE WORLD', 110),
     (b(21), b(22), 'fly_namek', 20, 'full', 'ALL THE WAY...', 110),
     (b(22), b(23), 'fly_namek', 66, 'full', 'TO NAMEK', 170),
     (b(23), b(24), 'namek_walk', 0, 'full', None, 0),
