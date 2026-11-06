@@ -25,14 +25,14 @@ def image(log1, gfx, header):
     return log1[pal - B:pal - B + 512], im.tobytes()
 
 
-FORMS, HALO_FREE = 0x6B82EC, {2: 115, 4: 118, 6: 120, 7: 120}          # form records; +0xE is the actor
+FORMS, HALO_FREE = 0x6B82EC, {4: 118, 6: 120, 7: 120}          # form records; +0xE is the actor
 STORY_FONT, STORY_TEXT, T_LAST = 0x15B2F0, 0x5C2E1A, 104                # LoG1's font record (palette, tiles) and opening text
 
 
 def alive(r):
-    """Buu's Fury's Goku is dead and wears a halo, and forms 2, 4 and 6 (and 7, 8) use those sprites. They get the halo-free ones of the same forms."""
+    """Buu's Fury's Goku is dead and wears a halo, and forms 2, 4, 6 and 7 use those sprites. His Super Saiyan forms get the halo-free ones. src/flight.c keeps him in form 0 except while he's dead in the story, in form 2."""
     for form, actor in HALO_FREE.items():
-        assert r[FORMS + 24 * form + 0xE] in (117, 119, 121, 120); r[FORMS + 24 * form + 0xE] = actor
+        assert r[FORMS + 24 * form + 0xE] in (119, 121); r[FORMS + 24 * form + 0xE] = actor
 
 
 def identity(r):

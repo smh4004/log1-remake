@@ -305,6 +305,16 @@ static void live_pictures(void) {
     }
 }
 
+/* Goku wears a halo only while he's dead: from Raditz's fight (quest 23) until the Dragon Balls bring him back (quest 37). Forms 0 and 2 are the same but for the halo. */
+#define GOKU_ALIVE 0x086AD1CC
+#define GOKU_DEAD 0x086AD30C
+#define QFLAG(q) (FLAGS[(420 + (q)) >> 3] >> ((420 + (q)) & 7) & 1)
+static void live_halo(void) {
+    int dead = QFLAG(23) && !QFLAG(37); volatile u8 *form = (volatile u8 *)0x03001574;
+    if (*form == 0 || *form == 2) *form = dead ? 2 : 0;                 /* takes effect when the next map loads: the game only sets a halo up then */
+    if (PLAYER && !dead && *(u32 *)(PLAYER + 0x58) == GOKU_DEAD) { *(u32 *)(PLAYER + 0x58) = GOKU_ALIVE; *(u32 *)(PLAYER + 0x4C) = 0; }   /* a save made with the halo */
+}
+
 /* A new game starts with LoG1's opening. */
 __attribute__((section(".text.table"))) volatile const u32 opening_ptr = 0;
 static void live_opening(void) {
@@ -383,6 +393,7 @@ void flight_keys(u8 *st) {
     if (DEBUG_LIST && PLAYER) { u32 zone[6] = {0, 0, 0, 0, 0, DEBUG_LIST}; DEBUG_LIST = 0; ((fn2)0x080073F1)(zone, PLAYER); }
     live_world(k, fresh);
     live_opening();
+    live_halo();
     live_pose(fresh);
     int r = (k & KEY_R) != 0, pressed = r && !STATE[0]; STATE[0] = r;
     if (!pressed || !PLAYER || !AREA || *(u8 *)AREA != WORLD_ID) return;
