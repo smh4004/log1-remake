@@ -3,7 +3,7 @@
 A personal, non-commercial ROM hack: Legacy of Goku's story and map layouts on Buu's Fury's engine, art, combat, EXP, equipment and UI.
 The output is a `.bps` patch.
 
-**Never add to this repo:** ROMs, or anything extracted from them (text, sprites, maps, portraits, screenshots). You supply the ROMs and the build reads them.
+**Never add to this repo:** ROMs. You supply the ROMs and the build reads them.
 
 ## Quick start
 `./setup.sh <Buu's Fury> <Legacy of Goku> <LoG I & II combo> <Legacy of Goku II>` installs the tools, fetches the decomps, checks your ROMs and builds `out/slice/slice.gba`.
