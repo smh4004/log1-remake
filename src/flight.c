@@ -257,8 +257,10 @@ typedef struct { u16 flag; u8 x, y; } mark_t;
 #define MARK_FIRST 118
 static void pose_apply(void);
 static void big_draw(void);
+static void fly_look(void);
 void flight_draw(int list) {
     pose_apply();
+    fly_look();
     big_draw();
     int map = AREA && *(u8 *)AREA == 0 && *(u8 *)(AREA + 1) == 50;
     if (map) {
@@ -356,6 +358,14 @@ typedef struct { u16 flag, actor; u32 anim, big; } pose_t;
 typedef struct { u32 obj, anim; } held_t;
 #define HELD ((held_t *)0x03005F40)
 #define HELD_N 4
+/* Over walls and roofs Goku has to look airborne: while flying he uses his flying animation in place of standing, walking and running. */
+static void fly_look(void) {
+    if (!STATE[1] || !PLAYER) return;
+    u32 def = *(u32 *)(PLAYER + 0x58), now = *(u32 *)(PLAYER + 0x50), *slots = (u32 *)(def + 0x54), fly = slots[15];
+    if (!fly || (now != slots[0] && now != slots[1] && now != slots[2] && now != fly)) return;
+    *(u32 *)(PLAYER + 0x50) = fly;
+    if (*(u8 *)(PLAYER + 0x11) >= *(u32 *)fly) *(u8 *)(PLAYER + 0x11) = 0;
+}
 static void pose_apply(void) { for (int i = 0; i < HELD_N; i++) if (HELD[i].obj) { *(u32 *)(HELD[i].obj + 0x50) = HELD[i].anim; *(u8 *)(HELD[i].obj + 0x11) = 0; } }
 static void live_pose(int fresh) {
     if (fresh) { for (int i = 0; i < HELD_N; i++) HELD[i].obj = 0; BIG_OBJ = 0; }
@@ -402,5 +412,5 @@ void flight_keys(u8 *st) {
         if (x < 0 || y < 0 || x > 255 || y > 255) return;
         if (!(((u8 *)AIR)[y * 32 + (x >> 3)] >> (x & 7) & 1)) return;   /* the real floor is here while flying */
     }
-    u32 t = FLOOR; FLOOR = AIR; AIR = t; STATE[1] ^= 1;
+    u32 t = FLOOR; FLOOR = AIR; AIR = t; STATE[1] ^= 1; if (!STATE[1]) ((void (*)(u32, int))0x0800ECDB)(PLAYER, 0);
 }
