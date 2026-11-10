@@ -43,7 +43,7 @@ def cool():
 run(open(os.path.join(ROOT, 'tools', 'routes', 'bf_boot_to_field.txt')).read().split('\n') + ['140'], 'new')
 check('new game: Energy Blast only', rec()['skills'] == [7], rec()['skills'])
 run(setq(37), 'q37'); run(['140'], 'kk')
-check('King Kai (quest 37): Kamehameha, Kaioken and Spirit Bomb', rec()['skills'] == [7, 15, 24, 19], rec()['skills'])
+check('King Kai (quest 37): Kamehameha and Kaioken (the Spirit Bomb is his post-game secret)', rec()['skills'] == [7, 15, 24], rec()['skills'])
 check('no Super Saiyan before Frieza', 20 not in rec()['skills'])
 check('no Instant Transmission (Yardrat)', 14 not in rec()['skills'])
 run(['10 L', '3 L+RIGHT', '10 L', '20'], 'wheel'); a = rd(SEL, 1)[0]; run(['10 L', '3 L+DOWN', '10 L', '20'], 'wheel2'); b = rd(SEL, 1)[0]
@@ -66,7 +66,7 @@ check('mastered Kaioken: its bar', struct.unpack('<H', rd(KK_GUARD, 2))[0] > 0)
 check('mastery shown as Level 3', r['levels'][r['skills'].index(24)] == 2, r['levels'])
 run(press(24, 200) + ['2 START', '60', '2 DOWN', '40', 'shot skills', '2 SELECT', '30', '2 B', '30', '2 B', '60'], 'menu')
 check('Skills page opens and closes', player() >> 24 == 2, hex(player()))
-cur[0] = 'kkm'; run(setq(68), 'end'); run(setq(71), 'q71'); run(w8(0x030010BD + (402 >> 3), rd(0x030010BD + (402 >> 3), 1)[0] | 1 << (402 & 7)) + ['200'], 'all')     # after the ending: Solar Flare (quest 71) and Instant Transmission (Yardrat)
+cur[0] = 'kkm'; run(setq(68), 'end'); run(setq(71), 'q71'); run(w8(0x030010BD + (402 >> 3), rd(0x030010BD + (402 >> 3), 1)[0] | 1 << (402 & 7) | 1 << (403 & 7)) + ['200'], 'all')     # after the ending: Solar Flare (quest 71), Instant Transmission (Yardrat) and the Spirit Bomb (King Kai's secret)
 r = rec(); known = struct.unpack('<H', rd(REC + 0x22, 2))[0]
 check('seven moves: six held, one waiting in the book', len(r['skills']) == 6 and bin(known).count('1') == 7, (r['skills'], hex(known)))
 held = r['skills'][:]; run(['2 START', '60', '2 DOWN', '40', '2 SELECT', '30', '2 B', '30', '2 B', '60'], 'swap')

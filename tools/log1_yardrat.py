@@ -24,6 +24,8 @@ AREA, SOURCE, MUSIC = 69, 28, 0                 # LoG1's Namek plateau; the musi
 START = (472, 584)                              # area 28's own start: the path in at the bottom
 QF, NOOP, VISIT, POSTGAME = 420, 895, 800, 420 + 68
 MET, BLINK, CAUGHT, LEARNED = 395, 396, 399, 402                     # BLINK and CAUGHT: three each
+SPIRIT = 403                                                         # King Kai's secret: the Spirit Bomb (src/skills.c SPIRIT_FLAG)
+KING_KAI, KK_SET, KK_SPOT = 13, 43, (304, 216)                       # his planet, his talk (LoG1 set 43), and Instant Transmission's landing: his front door
 ELDER = dict(sprite='wiseman', at=(472, 470))
 STUDENTS = [dict(sprite='oldman', a=(260, 300), b=(150, 520), look='student1'),
             dict(sprite='oldman', a=(700, 200), b=(850, 470), look='student2'),
@@ -86,7 +88,7 @@ def say(who, text):
 # src/flight.c draws the picker and reads its keys; each place has a travel list and a 192x32 picture: LoG1's own box and font tiles (as the opening),
 # "Instant Transmission" over "< place >".
 EARTH = [(0, "Roshi's Island"), (2, "Goku's House"), (4, 'Forest'), (5, 'Village'), (9, 'Crash Site'), (15, "Kami's Lookout"), (17, 'City'), (22, 'Military Base'), (23, 'Battlegrounds')]
-PLACES = EARTH + [(24, 'Namek'), (AREA, 'Yardrat')]
+PLACES = EARTH + [(24, 'Namek'), (KING_KAI, "King Kai's Planet"), (AREA, 'Yardrat')]
 STORY_FONT, T_CORNER, T_SIDE, T_TOP, T_FILL = 0x15B2F0, 100, 103, 102, 104
 MENU_SLOTS = {2, 8, 9, 103, 193, 217, 218, 223, 224, 225, 236}
 
@@ -140,7 +142,7 @@ def lists(st, log1):
     o += say('Yardrat Elder', "First, a test. My three apprentices are hiding around the village. Catch all three of them. They will not make it easy.")
     o += ['stop', 'label %s_hint' % s] + say('Yardrat Elder', "Catch all three of my apprentices. They blink away the first time you reach them, so feel for where they went.") + ['stop']
     o += ['label %s_teach' % s] + say('Yardrat Elder', "All three! You are quicker than you look. Now, close your eyes. Feel for the energy of someone far away...")
-    o += say('goku', "...I can feel Krillin! And Chi-Chi, and Master Roshi... it's like they're right next to me!")
+    o += say('goku', "...I can feel Krillin! And Chi-Chi, and Master Roshi... and way out there, King Kai! It's like they're right next to me!")
     o += say('Yardrat Elder', "Then go to them. That is Instant Transmission.")
     o += ['set_flag %d' % LEARNED, 'do call 194 %d' % st.bal.quest_exp(AREA, True)]
     o += say(None, "Goku learned Instant Transmission! Choose it with L and press B where no enemy is near to go anywhere you've been.") + ['stop']
@@ -157,8 +159,27 @@ def lists(st, log1):
     import log1_world
     spot = log1_world.spots(log1, st.ids, None)
     for n, name in PLACES:
+        if n == KING_KAI: spot[n] = KK_SPOT
         if n in spot: o += ['list it_%d' % n, 'set_flag %d' % NOOP, 'do call 120 20; call 119 26 %d 1 %d %d; call 121 20' % (n + 1, spot[n][0], spot[n][1]), 'stop']
     o += ['list dbgscene_yardrat_map', 'set_flag %d' % NOOP, 'do call 120 20; call 118 0 50 0 %d %d; call 121 20' % (log1_world.YARDRAT_AT[0] + 16, log1_world.YARDRAT_AT[1] + 40), 'stop']   # test: on the map below Yardrat
+    return o
+
+
+def king_kai(st):
+    """Lines put first in King Kai's talk (set 43): after the ending, the only way back to his planet is Instant Transmission, and he teaches the
+    Spirit Bomb for it (the owner, Nov 9: "a post game secret reward ... maybe King Kai again")."""
+    k = lambda t: st.say([dict(who='kingkai', text=t)]); g = lambda t: st.say([dict(who='goku', text=t)])
+    o = ['unless_flag %d kk_pg_skip' % POSTGAME, 'if_flag %d kk_pg_done' % SPIRIT]
+    o += k("Wh-what?! Goku! How did you get all the way out here? You didn't die again, did you?")
+    o += g("Nope! The people on Yardrat taught me Instant Transmission. I felt your energy and here I am!")
+    o += k("Instant Transmission... hmph. Showing off. Well, since you came all this way, there is one last technique I never taught you.")
+    o += k("Raise your hands to the sky and borrow a little energy from every living thing: the trees, the animals, the people. All of it, gathered into one ball.")
+    o += k("The Spirit Bomb! Only someone with a pure heart can use it. Gather it in a fight, then let it fly. It takes a while to grow, so pick your moment!")
+    o += g("Wow, thanks, King Kai! Hey, want to hear a joke? Why did the Saiyan cross Snake Way? To get to the other... side!")
+    o += k("...Pfft. Hah! HAHAHA! Okay, that one was good. Now get out of here!")
+    o += ['set_flag %d' % SPIRIT, 'do call 194 %d' % st.bal.quest_exp(AREA, True)]
+    o += say(None, "Goku learned the Spirit Bomb! Choose it with L and press B in a fight. It grows over Goku's head, then flies the way he faces.") + ['stop']
+    o += ['label kk_pg_done'] + k("Go on, the Spirit Bomb needs time to grow. And come back when you have a new joke!") + ['stop', 'label kk_pg_skip']
     return o
 
 

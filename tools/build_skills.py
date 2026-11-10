@@ -17,6 +17,7 @@ SKILL_ROWS, SKILL_COUNT, SKILL_REF = 0x71DAF8, 24, 0x13618
 SS_SKILL, IT_SKILL, KAME_SKILL, KAIOKEN_SKILL, SPIRIT_SKILL, SOLAR_SKILL = 20, 14, 15, 24, 19, 25
 BOOK = (7, KAME_SKILL, KAIOKEN_SKILL, SPIRIT_SKILL, SS_SKILL, SOLAR_SKILL, IT_SKILL)     # Energy Blast, Kamehameha, Kaioken, Spirit Bomb, Super Saiyan, Solar Flare, Instant Transmission
 YARDRAT_FLAG = 402                                         # Instant Transmission: the Yardrat Elder teaches it (log1_yardrat.LEARNED)
+SPIRIT_FLAG = 403                                          # the Spirit Bomb: King Kai's post-game secret (log1_yardrat.SPIRIT)
 KK_NAME_UI = 1700
 MASTERY_L2, MASTERY_L3 = 100, 250
 CODE, CODE_END = 0xFC0000, 0x1000000
@@ -128,7 +129,7 @@ def thumb_bl(at, to):
 def compile_code(at):
     d = tempfile.mkdtemp(); c, o, e, b, ld = (os.path.join(d, n) for n in ('s.c', 's.o', 's.elf', 's.bin', 's.ld'))
     open(ld, 'w').write('SECTIONS { . = 0x%X; .text : { *(.text*) *(.rodata*) } .data : { *(.data*) *(.bss*) *(COMMON) } /DISCARD/ : { *(.comment) *(.ARM.attributes) } }\n' % (B + at))
-    defs = ['-DSS_SKILL=%d' % SS_SKILL, '-DIT_SKILL=%d' % IT_SKILL, '-DKAME_SKILL=%d' % KAME_SKILL, '-DKAIOKEN_SKILL=%d' % KAIOKEN_SKILL, '-DSPIRIT_SKILL=%d' % SPIRIT_SKILL, '-DSOLAR_SKILL=%d' % SOLAR_SKILL, '-DYARDRAT_FLAG=%d' % YARDRAT_FLAG,
+    defs = ['-DSS_SKILL=%d' % SS_SKILL, '-DIT_SKILL=%d' % IT_SKILL, '-DKAME_SKILL=%d' % KAME_SKILL, '-DKAIOKEN_SKILL=%d' % KAIOKEN_SKILL, '-DSPIRIT_SKILL=%d' % SPIRIT_SKILL, '-DSOLAR_SKILL=%d' % SOLAR_SKILL, '-DYARDRAT_FLAG=%d' % YARDRAT_FLAG, '-DSPIRIT_FLAG=%d' % SPIRIT_FLAG,
             '-DMASTERY_L2=%d' % MASTERY_L2, '-DMASTERY_L3=%d' % MASTERY_L3]
     subprocess.check_call(['arm-none-eabi-gcc', '-mthumb', '-mcpu=arm7tdmi', '-Os', '-ffreestanding', '-fno-builtin', '-nostdlib', '-fshort-wchar', *defs, '-c', os.path.join(ROOT, 'src', 'skills.c'), '-o', o])
     subprocess.check_call(['arm-none-eabi-gcc', '-mthumb', '-mcpu=arm7tdmi', '-nostdlib', '-T', ld, '-Wl,-e,player_input', o, '-lgcc', '-o', e])

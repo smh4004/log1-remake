@@ -1,7 +1,8 @@
 /* Goku's skills, ported from Buu's Fury Ultimate (ultimate/src/outfit.c): the Kaioken, transformation mastery and the skill book with SELECT swapping.
  *
  * Lore gates (the owner, Nov 9): Goku starts with the Energy Blast only. King Kai teaches the Kamehameha and the Kaioken after Gregory (quest 37), he
- * becomes a Super Saiyan against Frieza (quest 67), and Instant Transmission waits for Yardrat (YARDRAT_FLAG, not reachable yet). A held skill
+ * becomes a Super Saiyan against Frieza (quest 67), Instant Transmission waits for Yardrat (YARDRAT_FLAG) and the Spirit Bomb for King Kai's
+ * post-game secret (SPIRIT_FLAG, Nov 9). A held skill
  * that isn't earned yet is taken out of his slots (old saves and Buu's Fury's own start held all four).
  *
  * Kaioken: from a base form to its red copy (build_skills.py makes the forms and actors), a Super Saiyan class form with the red aura. Its bar
@@ -137,7 +138,7 @@ static int earned(int skill) {
     if (skill == KAIOKEN_SKILL || skill == KAME_SKILL) return QFLAG(37);      /* King Kai teaches both, after Gregory */
     if (skill == SS_SKILL) return QFLAG(67);               /* against Frieza */
     if (skill == IT_SKILL) return YARDRAT_FLAG && FLAG(YARDRAT_FLAG);
-    if (skill == SPIRIT_SKILL) return QFLAG(37);                                  /* King Kai again */
+    if (skill == SPIRIT_SKILL) return FLAG(SPIRIT_FLAG);                          /* King Kai's secret, after the ending: reach his planet by Instant Transmission */
     if (skill == SOLAR_SKILL) return QFLAG(71);                                   /* the Village wise man's reward, after the ending */
     return 1;
 }

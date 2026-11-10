@@ -349,7 +349,7 @@ class Story:
                 if t['type'] == 'after_conversation': after[t['set']].append(t)
         for s in sorted(self.area_sets | set(tasks) | set(self.state)):
             if s not in self.sets: continue
-            L = self.sets[s]; r = ['list talk_set%02d' % s, 'set_flag %d' % NOOP]
+            L = self.sets[s]; r = ['list talk_set%02d' % s, 'set_flag %d' % NOOP] + (log1_yardrat.king_kai(self) if s == log1_yardrat.KK_SET else [])
             for x, t in tasks[s]:
                 lab = 't%d_next' % t['id']; r.append('if_flag %d %s' % (TF + t['id'], lab))
                 if t['type'] == 'talk_with_item': r.append('unless_flag %d %s' % (TF + self.pick.get((x['quest'], t['item']), 0), lab))

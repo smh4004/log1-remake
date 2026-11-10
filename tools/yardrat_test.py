@@ -83,5 +83,17 @@ while names[rd(0x03005F31, 1)[0]] != "Roshi's Island": run(['2 RIGHT', '10'], 'p
 run(['2 A', '240'], 'went'); check("A goes there (Roshi's Island)", area() == (26, 1), area())
 run(['2 R', '40', '2 L', '300'], 'up'); check('flying up from Earth still reaches the map', area() == (0, 50), area())
 cur[0] = 'taught2'; run(['2 R', '40', '2 L', '300'], 'out'); check('flying up from Yardrat reaches the map (not straight back in)', area() == (0, 50), area())
+# King Kai's secret: after the ending, Instant Transmission reaches his planet (once visited in the story) and he teaches the Spirit Bomb
+cur[0] = 'taught2'; run(setf(Y.VISIT + Y.KING_KAI), 'kkv')
+check('no Spirit Bomb before King Kai\'s secret', 19 not in skills(), skills())
+run(w8(SEL, skills().index(14)) + ['4', '3 B', '20'], 'kkpick')
+while names[rd(0x03005F31, 1)[0]] != "King Kai's Planet": run(['2 RIGHT', '10'], 'kkpick')
+run(['2 A', '540'], 'kkwent'); check("Instant Transmission reaches King Kai's Planet", area() == (26, Y.KING_KAI + 1), area())
+kk = min(npcs(), key=lambda p: abs(p[0] - 248) + abs(p[1] - 192))
+talk(*kk, 'kktalk'); run(['2 A', '30'] * 20 + ['300'] + ['2 A', '60'] * 6 + ['300'], 'kktaught')     # the EXP may level him up
+check('King Kai teaches the Spirit Bomb', flag(Y.SPIRIT) == 1 and 19 in skills(), (flag(Y.SPIRIT), skills()))
+run(w8(SEL, skills().index(14)) + ['4', '3 B', '20'], 'kkhome')
+while names[rd(0x03005F31, 1)[0]] != "Roshi's Island": run(['2 RIGHT', '10'], 'kkhome')
+run(['2 A', '540'], 'kkhome2'); check("Instant Transmission takes him home from King Kai's Planet", area() == (26, 1), area())
 print('%d failed' % len(fails) if fails else 'all passed')
 sys.exit(1 if fails else 0)
