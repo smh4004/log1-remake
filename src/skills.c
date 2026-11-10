@@ -1,6 +1,6 @@
 /* Goku's skills, ported from Buu's Fury Ultimate (ultimate/src/outfit.c): the Kaioken, transformation mastery and the skill book with SELECT swapping.
  *
- * Lore gates (the owner, Nov 9): Goku starts with the Energy Blast and the Kamehameha. King Kai teaches the Kaioken after Gregory (quest 37), he
+ * Lore gates (the owner, Nov 9): Goku starts with the Energy Blast only. King Kai teaches the Kamehameha and the Kaioken after Gregory (quest 37), he
  * becomes a Super Saiyan against Frieza (quest 67), and Instant Transmission waits for Yardrat (YARDRAT_FLAG, not reachable yet). A held skill
  * that isn't earned yet is taken out of his slots (old saves and Buu's Fury's own start held all four).
  *
@@ -134,7 +134,7 @@ static void equip(u8 *rec, int at, int skill) {     /* put a skill in slot `at` 
     if (at == rec[0x0C]) rec[0x0C]++;
 }
 static int earned(int skill) {
-    if (skill == KAIOKEN_SKILL) return QFLAG(37);          /* King Kai, after Gregory */
+    if (skill == KAIOKEN_SKILL || skill == KAME_SKILL) return QFLAG(37);      /* King Kai teaches both, after Gregory */
     if (skill == SS_SKILL) return QFLAG(67);               /* against Frieza */
     if (skill == IT_SKILL) return YARDRAT_FLAG && FLAG(YARDRAT_FLAG);
     return 1;

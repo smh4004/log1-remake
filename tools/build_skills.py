@@ -14,8 +14,8 @@ from wfz import decompress_stream  # noqa: E402
 B = 0x08000000
 FORMS, FORM_COUNT = 0x6B82EC, 54
 SKILL_ROWS, SKILL_COUNT, SKILL_REF = 0x71DAF8, 24, 0x13618
-SS_SKILL, IT_SKILL, KAIOKEN_SKILL = 20, 14, 24
-BOOK = (7, 15, KAIOKEN_SKILL, SS_SKILL, IT_SKILL)          # Energy Blast, Kamehameha, Kaioken, Super Saiyan, Instant Transmission
+SS_SKILL, IT_SKILL, KAME_SKILL, KAIOKEN_SKILL = 20, 14, 15, 24
+BOOK = (7, KAME_SKILL, KAIOKEN_SKILL, SS_SKILL, IT_SKILL)          # Energy Blast, Kamehameha, Kaioken, Super Saiyan, Instant Transmission
 YARDRAT_FLAG = 0                                           # Instant Transmission's flag, once Yardrat exists (0: not yet)
 KK_NAME_UI = 1700
 MASTERY_L2, MASTERY_L3 = 100, 250
@@ -124,7 +124,7 @@ def thumb_bl(at, to):
 def compile_code(at):
     d = tempfile.mkdtemp(); c, o, e, b, ld = (os.path.join(d, n) for n in ('s.c', 's.o', 's.elf', 's.bin', 's.ld'))
     open(ld, 'w').write('SECTIONS { . = 0x%X; .text : { *(.text*) *(.rodata*) } .data : { *(.data*) *(.bss*) *(COMMON) } /DISCARD/ : { *(.comment) *(.ARM.attributes) } }\n' % (B + at))
-    defs = ['-DSS_SKILL=%d' % SS_SKILL, '-DIT_SKILL=%d' % IT_SKILL, '-DKAIOKEN_SKILL=%d' % KAIOKEN_SKILL, '-DYARDRAT_FLAG=%d' % YARDRAT_FLAG,
+    defs = ['-DSS_SKILL=%d' % SS_SKILL, '-DIT_SKILL=%d' % IT_SKILL, '-DKAME_SKILL=%d' % KAME_SKILL, '-DKAIOKEN_SKILL=%d' % KAIOKEN_SKILL, '-DYARDRAT_FLAG=%d' % YARDRAT_FLAG,
             '-DMASTERY_L2=%d' % MASTERY_L2, '-DMASTERY_L3=%d' % MASTERY_L3]
     subprocess.check_call(['arm-none-eabi-gcc', '-mthumb', '-mcpu=arm7tdmi', '-Os', '-ffreestanding', '-fno-builtin', '-nostdlib', '-fshort-wchar', *defs, '-c', os.path.join(ROOT, 'src', 'skills.c'), '-o', o])
     subprocess.check_call(['arm-none-eabi-gcc', '-mthumb', '-mcpu=arm7tdmi', '-nostdlib', '-T', ld, '-Wl,-e,player_input', o, '-lgcc', '-o', e])

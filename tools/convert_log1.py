@@ -26,8 +26,8 @@ ACTIONS = dict(conversation='generated', set_entry='generated', give_exp='genera
                scene='manual', set_walkable='manual', speed_up='manual', end_game='manual')
 
 
-# Lines the remake rewrites. King Kai taught LoG1's Goku the Kamehameha; here he teaches the Kaioken, as in the series (src/skills.c learns it at quest 37).
-REWRITE = {(43, 22): "Since you have improved so much, I can teach you my own technique: the Kaioken! It multiplies your power, but it puts a terrible strain on your body. Use it carefully!"}
+# Lines the remake rewrites. King Kai taught LoG1's Goku the Kamehameha; here he also teaches the Kaioken, as in the series (src/skills.c learns both at quest 37).
+REWRITE = {(43, 22): "Since you have improved so much, I can teach you the Kame Hame Ha attack, and my own technique: the Kaioken! It multiplies your power, but it puts a terrible strain on your body. Use it carefully!"}
 
 
 def conversations(log1):
