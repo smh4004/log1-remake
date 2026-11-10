@@ -72,8 +72,8 @@ __attribute__((section(".text.table"))) volatile const u32 forms_at = 0;    /* t
 __attribute__((section(".text.table"))) volatile const u8 kaioken_map[8][2] = {{255, 255}};
 __attribute__((section(".text.table"))) volatile const u8 skill_book[8] = {255};   /* Goku's skills in book order; the mask's bits follow it */
 __attribute__((section(".text.table"))) volatile const u8 kk_bar[0x500] = {1};
-__attribute__((section(".text.table"))) const u32 kk_aura_field[9] = {1}, kk_aura_other[21] = {1};
-__attribute__((section(".text.table"))) const int kk_vt[14] = {1};
+__attribute__((section(".text.fixed"))) const u32 kk_aura_field[9] = {1}, kk_aura_other[21] = {1};
+__attribute__((section(".text.fixed"))) const int kk_vt[14] = {1};
 #define form_table ((const u8 *)forms_at)
 
 static u8 *rec_of(int c) { return RECORDS + c * RECORD_SIZE; }
