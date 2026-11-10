@@ -5,7 +5,7 @@
 import collections, json, os, struct, subprocess, sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path[:0] = [os.path.join(ROOT, 'tools'), os.path.join(ROOT, 'vendor', 'gero-tools', 'tools')]
-import log1_start, log1_balance, log1_music, log1_split, build_flight, log1_actors, log1_areas, log1_portraits, log1_story, log1_world, scenes, text_tool  # noqa: E402
+import build_skills, log1_start, log1_balance, log1_music, log1_split, build_flight, log1_actors, log1_areas, log1_portraits, log1_story, log1_world, scenes, text_tool  # noqa: E402
 
 
 IDS = [int(v) for v in os.environ['IDS'].split(',')] if os.environ.get('IDS') else log1_split.ids(); LAST_QUEST = int(os.environ.get('LAST_QUEST', 74))
@@ -24,14 +24,14 @@ def main():
         an, x, y = os.environ['START'].split(','); op2 = os.path.join(O, 'opening_test.scene'); open(op2, 'w').write(open(op).read().replace('call 119 26 1 1 184 72', 'call 119 26 %d 1 %s %s' % (int(an) + 1, x, y))); op = op2
     sc = [scenes.parse(op), scenes.parse(os.path.join(ROOT, 'src', 'scenes', 'intro.scene')), scenes.parse(path)]
     if not os.path.exists(os.path.join(O, 'text', 'ui.txt')): text_tool.export(bf, os.path.join(O, 'text'))
-    log1_world.ui_text(os.path.join(O, 'text', 'ui_log1.txt'))
+    log1_world.ui_text(os.path.join(O, 'text', 'ui_log1.txt')); build_skills.ui_text(os.path.join(O, 'text', 'ui_skills.txt'))
     r = bytearray(text_tool.build(bf, os.path.join(O, 'text'), extra=scenes.texts(sc))); r += b'\xff' * max(0, 0x1000000 - len(r))
     assert log1_portraits.install(r, combo, plan)[0] == ptr
     act = log1_actors.Actors(r, log1, L, 0xC00000)
     act.bal = bal; s_ = log1_balance.START; struct.pack_into('<HHHBBBB', r, 0x6FDA4C, s_['level'], s_['hp'], s_['ep'], s_['str'], s_['pow'], s_['end'], s_['spd'])
     idx = {n: (log1_areas.BF_IDX.get(n) or act.actor(n, False)) - 9 for n in st.move_names}   # scene walks name their actors
     end = len(r); r += bytes(0x100000); fin = scenes.compile_all(r, sc, text_tool.EXTRA_REFS, scenes.aliases(''), end, idx); del r[(fin + 3) & ~3:]
-    tab, spawns, walks, picks, foes, zones, skipped, moved, qc, follows, walkins = log1_areas.build(r, L, IDS, st, dict(scenes.NAMED), act); pose_rows = act.pose_rows(st.pose_rows, lambda n: 0 if n == 'goku' else log1_areas.BF_IDX.get(n) or act.actor(n, False)); new, cur = act.finish()
+    tab, spawns, walks, picks, foes, zones, skipped, moved, qc, follows, walkins = log1_areas.build(r, L, IDS, st, dict(scenes.NAMED), act); pose_rows = act.pose_rows(st.pose_rows, lambda n: 0 if n == 'goku' else log1_areas.BF_IDX.get(n) or act.actor(n, False)); red = build_skills.actors(act); new, cur = act.finish()
     print('actors added', new, 'without frames', act.missing, 'end', hex(cur)); print('arrival moves', [m for m in moved if m[2]]); print('skipped', collections.Counter(s[2] for s in skipped))
     print('music bytes', log1_music.install(r, log1))
     print('world map', log1_world.install(r, L, IDS, log1_areas.WORLD)); fly = [(tab + 56 * (log1_areas.COUNT + IDS.index(n)), scenes.NAMED['fly_%d' % n]) for n, _, _ in log1_world.PLACES if n in IDS]
@@ -42,6 +42,7 @@ def main():
     while len(r) % 0x10000: r.append(0xFF)
     log1_start.identity(r)
     log1_start.alive(r)
+    print('skills', build_skills.install(r, red))
     open(os.path.join(O, os.environ.get('OUT', 'slice') + '.gba'), 'wb').write(r); print('rom', len(r))
 
 

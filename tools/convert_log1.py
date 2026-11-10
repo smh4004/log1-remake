@@ -26,13 +26,17 @@ ACTIONS = dict(conversation='generated', set_entry='generated', give_exp='genera
                scene='manual', set_walkable='manual', speed_up='manual', end_game='manual')
 
 
+# Lines the remake rewrites. King Kai taught LoG1's Goku the Kamehameha; here he teaches the Kaioken, as in the series (src/skills.c learns it at quest 37).
+REWRITE = {(43, 22): "Since you have improved so much, I can teach you my own technique: the Kaioken! It multiplies your power, but it puts a terrible strain on your body. Use it carefully!"}
+
+
 def conversations(log1):
     sets = {}
     for p in sorted(glob.glob(log1 + '/assets/dialogue/set*.txt')):
         n = int(re.search(r'set(\d+)', p)[1]); L = {}
         for ln in open(p, encoding='utf-8'):
             m = re.match(r'(\d+): (\S+) > (\d+)(?: \| (.*))?$', ln.rstrip('\n'))
-            if m: L[int(m[1])] = dict(who=m[2], next=int(m[3]), text=m[4] or '')
+            if m: L[int(m[1])] = dict(who=m[2], next=int(m[3]), text=REWRITE.get((n, int(m[1])), m[4] or ''))
         sets[n] = L
     return sets
 
