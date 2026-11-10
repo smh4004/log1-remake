@@ -46,6 +46,8 @@ run(setq(37), 'q37'); run(['140'], 'kk')
 check('King Kai (quest 37): Kamehameha and Kaioken', rec()['skills'] == [7, 15, 24], rec()['skills'])
 check('no Super Saiyan before Frieza', 20 not in rec()['skills'])
 check('no Instant Transmission (Yardrat)', 14 not in rec()['skills'])
+run(['10 L', '3 L+RIGHT', '10 L', '20'], 'wheel'); a = rd(SEL, 1)[0]; run(['10 L', '3 L+DOWN', '10 L', '20'], 'wheel2'); b = rd(SEL, 1)[0]
+check('quick pick: L+Right the 2nd skill, L+Down the 3rd', (a, b) == (1, 2), (a, b))
 hp0 = rec()['hp']; run(press(24, 600), 'on'); r = rec()
 check('Kaioken: red form', r['form'] == 54, r['form'])
 check('Kaioken: costs health', r['hp'] < hp0, (hp0, r['hp']))

@@ -353,8 +353,9 @@ void combat_hook(void *defender, int *hit) {
     if (stats) { stats[0] = strength; stats[1] = power; }
 }
 /* The player's keys (vtable 0x0804C9F0 +0x84), every frame: Kaioken's bar, the book now and then, and the quick wheel: hold L and press a
-   direction to pick a skill at once (up the 1st, right the 2nd, down the 3rd, left the 4th). Not on the world map, where L lands. */
-#define WORLD_ID 26
+   direction to pick a skill at once (up the 1st, right the 2nd, down the 3rd, left the 4th). Not while flying, where L takes off to the world map
+   (src/flight.c), nor on that map (Buu's Fury's 0:50). */
+#define FLYING (*(volatile u8 *)0x03006105)
 u16 *player_input(void) {
     u16 *keys = ((u16 *(*)(void))0x0804F8C9)();
     u8 *rec = rec_of(CUR);
@@ -362,7 +363,7 @@ u16 *player_input(void) {
     int d, i;
     kk_track();
     if (CUR == 0 && (FRAMES & 63) == 0) skills_sync();
-    if (!(keys[1] & 0x200) || (AREA && *(u8 *)AREA == WORLD_ID)) return keys;
+    if (!(keys[1] & 0x200) || FLYING || (AREA && *(u16 *)AREA == (0 | 50 << 8))) return keys;
     d = keys[2] & 0xF0;
     if (d) {
         for (i = 0; i < 4; i++) if (d & (0x10 << i)) break;
