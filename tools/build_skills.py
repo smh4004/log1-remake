@@ -20,7 +20,8 @@ NATIVES, JOIN_NATIVE, JOIN_OLD = 0x55098, 0xE8, 0x08003891   # party_join: a nat
 BEAM_PARAMS, BEAM_VT = 0x71DA68, 0x4D9F8
 BALL_PARAMS, BALL_VT = 0x76ACC0, 0x4D05C                 # Big Bang's: levels 1 and 2 cyan ball, level 3 gold
 DISC_POWER = (1.25, 1.25, 1.3)
-LOG2 = os.path.join(ROOT, 'rom', 'log2.gba')
+COMBO = os.path.join(ROOT, 'rom', 'log12.gba')            # the LoG I & II cart: LoG2 from 0x800000 (BFU's USA-cart offsets, moved to it)
+L2_BEAM_ART, L2_PAL, L2_BASE = 0x6E46D8, 0x3ED01C, 0x08800000
 BOOK = (7, KAME_SKILL, KAIOKEN_SKILL, SPIRIT_SKILL, SS_SKILL, SOLAR_SKILL, IT_SKILL)     # Energy Blast, Kamehameha, Kaioken, Spirit Bomb, Super Saiyan, Solar Flare, Instant Transmission
 YARDRAT_FLAG = 402                                         # Instant Transmission: the Yardrat Elder teaches it (log1_yardrat.LEARNED)
 SPIRIT_FLAG = 403                                          # the Spirit Bomb: King Kai's post-game secret (log1_yardrat.SPIRIT)
@@ -342,15 +343,15 @@ def beam_rows(r, pal, one, put, fill, sym, clean_rows):
         remap = remap_of(tint); copies = {}
         head = frames(u32(r, BEAM_PARAMS + 12) - B, 64, remap, copies)
         if name == 'sbc':        # LoG2's beam: 7 rows a facing (muzzle 2, body 3, tip 2) laid into BF's 16-row facings (muzzle 0-1, body 3-5 and spare 6, tip 7-8 and 10-11)
-            l2 = open(LOG2, 'rb').read(); L2_ART = 0x6E4560
-            l2pal = np.frombuffer(l2[0x3ECEA4:0x3ECEA4 + 768], np.uint8).reshape(256, 3).astype(int)
+            l2 = open(COMBO, 'rb').read()[0x800000:]; L2_ART = L2_BEAM_ART
+            l2pal = np.frombuffer(l2[L2_PAL:L2_PAL + 768], np.uint8).reshape(256, 3).astype(int)
             l2map = bytes(0 if v == 0 else one(l2pal[v]) for v in range(256)); l2tiles = {}
             record = bytearray(r[head - B:head - B + 768])
             for facing in range(4):
                 for bf, row in ((0, 0), (1, 1), (3, 2), (4, 3), (5, 4), (7, 5), (8, 6), (10, 5), (11, 6)):
                     hdr, attr, tiles = struct.unpack_from('<III', l2, L2_ART + 12 * (facing * 7 + row))
                     if tiles not in l2tiles:
-                        t = tiles - B; l2tiles[tiles] = put(l2[t:t + 256].translate(l2map))
+                        t = tiles - L2_BASE; l2tiles[tiles] = put(l2[t:t + 256].translate(l2map))
                     struct.pack_into('<III', record, 12 * (facing * 16 + bf), hdr, attr, l2tiles[tiles])
                 struct.pack_into('<I', record, 12 * (facing * 16 + 6) + 8, u32(record, 12 * (facing * 16 + 5) + 8))
             head = put(bytes(record))
