@@ -56,6 +56,9 @@ run(w32(0x0300617C, LISTS['dbgscene_yardrat_map']) + ['200', '60 B', '300'], 'ea
 check('Yardrat closed before the ending', area() == (0, 50), area())
 cur[0] = 'new'; run(setf(Y.POSTGAME), 'post'); run(w32(0x0300617C, LISTS['dbgscene_yardrat_map']) + ['200', '60 B', '300'], 'land')
 check('Yardrat open after the ending (hold B under it)', area() == (26, Y.AREA + 1), area())
+cur[0] = 'land'; run(['4 START', '120', '4 B', '200'] * 3, 'menus')
+check('the pause menu opens and closes three times (Yardrat)', player() >> 24 == 2 and area() == (26, Y.AREA + 1), (hex(player()), area()))
+cur[0] = 'land'
 people = npcs()
 check('the Elder and three apprentices', len(people) == 4, people)
 elder = min(people, key=lambda p: abs(p[0] - Y.ELDER['at'][0]) + abs(p[1] - Y.ELDER['at'][1]))

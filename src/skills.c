@@ -385,6 +385,7 @@ u16 *player_input(void) {
     static const u8 pick[4] = {1, 3, 0, 2};
     int d, i;
     kk_track();
+    rec_of(0)[0] |= 1;      /* Goku is in the party: the pause menu lists party members (record +0 bit 0) and, with none, reads a stale entry and crashes */
     if (CUR == 0 && (FRAMES & 63) == 0) skills_sync();
     if (!(keys[1] & 0x200) || FLYING || (AREA && *(u16 *)AREA == (0 | 50 << 8))) return keys;
     d = keys[2] & 0xF0;
