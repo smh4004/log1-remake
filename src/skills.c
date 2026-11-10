@@ -5,8 +5,9 @@
  * that isn't earned yet is taken out of his slots (old saves and Buu's Fury's own start held all four).
  *
  * Kaioken: from a base form to its red copy (build_skills.py makes the forms and actors), a Super Saiyan class form with the red aura. Its bar
- * drains as Super Saiyan's does and it costs health as it goes; hits are 1.25x to 1.75x by its mastery. Fully mastered, Goku's Super Saiyan forms
- * have a red copy too (Super Saiyan Kaioken), and the health cost becomes a cyan bar of its own that takes hits without a stagger.
+ * drains as Super Saiyan's does and it costs health as it goes; hits are 1.25x to 1.75x by its mastery. Goku's Super Saiyan forms
+ * have no red copy: this game never puts the Kaioken and Super Saiyan together (the owner, Nov 9). Fully mastered, the health cost becomes a
+ * cyan bar of its own that takes hits without a stagger.
  *
  * Mastery: each drain unit in a tier's form trains it; at MASTERY_L2 and MASTERY_L3 units the tier reaches Level 2 and 3 and drains slower.
  * The units live in record 1 +0x22 (Super Saiyan) and +0x23 (Kaioken): Gohan's record, never played here, and a field retail never uses, so
@@ -233,8 +234,7 @@ int kaioken_can(u8 *record) {
     int form = record[0x14];
     if (is_kaioken(form)) return 1;
     if (mapped(form) == 255) return 0;
-    if (!(flags_of(form) & 3)) return can_start(record);              /* from a base form */
-    return kk_mastered() && can_step(record);                          /* Super Saiyan Kaioken: from Super Saiyan once Kaioken is fully mastered */
+    return !(flags_of(form) & 3) && can_start(record);                 /* from a base form only: never with Super Saiyan (the owner, Nov 9) */
 }
 static void kk_down(u8 *record, void *sprite) {       /* out of Kaioken: to its base, or from Super Saiyan Kaioken to Super Saiyan with its pool */
     if (flags_of(form_table[record[0x14] * 24 + 0x17]) & 1) KK_POOL = *(u16 *)(record + 0x1E) + 1;

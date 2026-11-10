@@ -20,9 +20,9 @@ YARDRAT_FLAG = 0                                           # Instant Transmissio
 KK_NAME_UI = 1700
 MASTERY_L2, MASTERY_L3 = 100, 250
 CODE, CODE_END = 0xFC0000, 0x1000000
-# Kaioken: Goku's forms -> the actor index (form +0xE less 9) its red copy is made from. 0 base, 2 with the halo (dead, quest 23-37), 3 and 4 Super Saiyan
-# (Super Saiyan Kaioken, once the Kaioken is mastered; the remake's form 4 shares form 3's halo-free figure, log1_start.HALO_FREE).
-KAIOKEN = {0: 106, 2: 108, 3: 109, 4: 109}
+# Kaioken: Goku's forms -> the actor index (form +0xE less 9) its red copy is made from. 0 base, 2 with the halo (dead, quest 23-37). No Super Saiyan
+# Kaioken: this game never puts the two together (the owner, Nov 9).
+KAIOKEN = {0: 106, 2: 108}
 KAIOKEN_TINT = 0.3
 OBJ_PAL = 0x701B0 + 768
 MENU_SLOTS = {2, 8, 9, 103, 193, 217, 218, 223, 224, 225, 236}   # OBJ palette entries the menus change at run time
@@ -35,7 +35,7 @@ u32 = lambda r, o: struct.unpack_from('<I', r, o)[0]
 def ui_text(path):
     with open(path, 'w', encoding='utf-8') as f:
         f.write('[ui:%d]\n= Kaioken\n\n' % KK_NAME_UI)
-        f.write('[ui:%d]\n= Press the B Button for the Kaioken: attacks hit 1.25x as hard, up to 1.75x as you master it, but it wears on your health. Press it again to change back.\n\n' % (KK_NAME_UI + 1))
+        f.write('[ui:%d]\n= Press the B Button for the Kaioken: attacks hit 1.25x as hard, up to 1.75x as you master it, but it wears on your health. Not with Super Saiyan. Press it again to change back.\n\n' % (KK_NAME_UI + 1))
 
 
 def palette(r):
@@ -209,6 +209,8 @@ def install(r, red):
     site(0xE9D8, 'f0b5061c0c1c0831', jump('combat_hook'))           # damage: Kaioken's multiplier and the mastered bar's guard
     site(0xBCAE, 'a08971490522400140181202291c3df03cfa',            # the HUD's copy to VRAM: skills_hud(widget, buffer) paints the bar and copies
          bytes.fromhex('201c291c024b') + thumb_bl(0xBCAE + 6, 0x46AA6) + bytes.fromhex('02e0c046') + struct.pack('<I', sym['skills_hud'] | 1))
+    # Buu's Fury's level-up script asks the level of moves Goku may not hold yet here (sub_08013BCC asserts on a missing one): a missing move is level 0
+    site(0x13BEE, 'ff228e320023', bytes.fromhex('002010bdc046'))
     for vt_, slot, want, name in ((0x4C9F0, 0x84, 0x0804F8C9, 'player_input'), (0x4B024, 4, 0x080171A9, 'skilltab_setup'), (0x4B024, 40, 0x080175FD, 'skilltab_keys')):
         assert B + vt_ + struct.unpack_from('<i', r, vt_ + slot)[0] == want, 'vtable changed at 0x%X' % (vt_ + slot)
         struct.pack_into('<i', r, vt_ + slot, (sym[name] | 1) - (B + vt_))
