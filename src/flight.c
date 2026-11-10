@@ -258,10 +258,12 @@ typedef struct { u16 flag; u8 x, y; } mark_t;
 static void pose_apply(void);
 static void big_draw(void);
 static void fly_look(void);
+static void it_draw(void);
 void flight_draw(int list) {
     pose_apply();
     fly_look();
     big_draw();
+    it_draw();
     int map = AREA && *(u8 *)AREA == 0 && *(u8 *)(AREA + 1) == 50;
     if (map) {
         int e = MARK_FIRST;
@@ -283,6 +285,7 @@ void flight_draw(int list) {
 #define PIC_SAVE 896
 #define PIC_BACK 897
 #define PIC_FIRST 55                                                   /* the first picture's area number */
+#define PIC_END 70                                                     /* past the last (Yardrat, 70, is a real area) */
 #define PX (*(volatile int *)0x03005F18)
 #define PY (*(volatile int *)0x03005F1C)
 #define DISPCNT (*(volatile u16 *)0x04000000)
@@ -298,7 +301,7 @@ static void live_pictures(void) {
     if (!PLAYER) return;
     if (FLAGS[PIC_SAVE >> 3] >> (PIC_SAVE & 7) & 1) { FLAGS[PIC_SAVE >> 3] &= ~(1 << (PIC_SAVE & 7)); PX = *(int *)(PLAYER + 0x1A0); PY = *(int *)(PLAYER + 0x1A4); }
     if (FLAGS[PIC_BACK >> 3] >> (PIC_BACK & 7) & 1) { FLAGS[PIC_BACK >> 3] &= ~(1 << (PIC_BACK & 7)); *(int *)(PLAYER + 0x1A0) = PX; *(int *)(PLAYER + 0x1A4) = PY; }
-    if (AREA && *(u8 *)AREA == 26 && *(u8 *)(AREA + 1) >= PIC_FIRST) DISPCNT &= ~0x1000;
+    if (AREA && *(u8 *)AREA == 26 && *(u8 *)(AREA + 1) >= PIC_FIRST && *(u8 *)(AREA + 1) < PIC_END) DISPCNT &= ~0x1000;
     if (FLAGS[FLASH_FLAG >> 3] >> (FLASH_FLAG & 7) & 1) { FLAGS[FLASH_FLAG >> 3] &= ~(1 << (FLASH_FLAG & 7)); FLASH_LEFT = 30; BLD_KEEP = BLDCNT_; BLDCNT_ = 0xBF; }
     if (FLASH_LEFT) { FLASH_LEFT--; BLDY_ = FLASH_LEFT >= 15 ? 16 : FLASH_LEFT; if (!FLASH_LEFT) { BLDCNT_ = BLD_KEEP; BLDY_ = 0; } }
     if (FLAGS[STORY_FLAG >> 3] >> (STORY_FLAG & 7) & 1) { FLAGS[STORY_FLAG >> 3] &= ~(1 << (STORY_FLAG & 7)); ((void (*)(void))PLAY_STORY)(); }
@@ -330,7 +333,7 @@ __attribute__((section(".text.table"))) volatile const u32 saved_ptr = 0;
 #define SAVE_HELD (*(volatile u8 *)0x03005F21)
 static void live_save(u32 k) {
     int held = (k & 4) != 0, pressed = held && !SAVE_HELD; SAVE_HELD = held;
-    if (!pressed || !PLAYER || !AREA || *(u8 *)AREA != WORLD_ID || *(u8 *)(AREA + 1) >= PIC_FIRST || STATE[1] || ZBUSY) return;
+    if (!pressed || !PLAYER || !AREA || *(u8 *)AREA != WORLD_ID || (*(u8 *)(AREA + 1) >= PIC_FIRST && *(u8 *)(AREA + 1) < PIC_END) || STATE[1] || ZBUSY) return;
     int at[2] = {*(int *)(PLAYER + 0x1A0) >> 8, *(int *)(PLAYER + 0x1A4) >> 8};
     ((void (*)(u32, u32, int *, int))0x08004963)(0x03001068, *(volatile u32 *)0x03001910, at, 0);   /* records the area and spot, marks the slot and writes it */
     u32 zone[6] = {0, 0, 0, 0, 0, saved_ptr}; ZBUSY = 1; ((fn2)0x080073F1)(zone, PLAYER); ZBUSY = 0;
@@ -383,10 +386,58 @@ static void live_pose(int fresh) {
     pose_apply();
 }
 
+/* Instant Transmission's picker (Yardrat, post-game). src/skills.c sets IT_PENDING when the move is used with no enemy near. A box at the top of
+   the screen names a place Goku has been; left/right or up/down change it, A goes there (its travel list), B cancels. The game gets no keys meanwhile.
+   Table of {visited flag, travel list, 192x32 picture (three 64x32 8bpp sprites)}, ending in flag 0. The picture goes in low OBJ tiles, which
+   actors don't reach (as big_draw's). */
+__attribute__((section(".text.table"))) volatile const u32 it_ptr = 0;
+typedef struct { u32 flag, list, gfx; } it_t;
+#define IT_PENDING (*(volatile u8 *)0x03005F93)
+#define PICK_ON (*(volatile u8 *)0x03005F30)
+#define PICK_IDX (*(volatile u8 *)0x03005F31)
+#define PICK_SHOWN (*(volatile u8 *)0x03005F32)     /* PICK_IDX + 1 when its picture is in VRAM */
+#define PICK_PREV (*(volatile u16 *)0x03005F34)
+#define PICK_TILE 256                                /* 0x06012000 */
+static int it_seen(const it_t *t) { return FLAGS[t->flag >> 3] >> (t->flag & 7) & 1; }
+static u32 live_it(u32 k) {
+    const it_t *t = (const it_t *)it_ptr; int n = 0, i;
+    if (!t) return k;
+    while (t[n].flag) n++;
+    if (IT_PENDING && !PICK_ON && PLAYER && !ZBUSY && n) {
+        IT_PENDING = 0; PICK_ON = 1; PICK_SHOWN = 0; PICK_PREV = k; PICK_IDX = 0;
+        if (AREA) for (i = 0; i < n; i++) if (t[i].flag == 800u + *(u8 *)(AREA + 1) - 1) PICK_IDX = i;        /* start on where Goku is */
+        if (!it_seen(&t[PICK_IDX])) for (i = 0; i < n; i++) if (it_seen(&t[i])) { PICK_IDX = i; break; }
+    }
+    IT_PENDING = 0;
+    if (!PICK_ON) return k;
+    u32 nw = k & ~PICK_PREV; PICK_PREV = k;
+    int d = nw & 0x90 ? 1 : nw & 0x60 ? -1 : 0;
+    if (d) for (i = 1; i <= n; i++) { int j = (PICK_IDX + d * i + n * n) % n; if (it_seen(&t[j])) { PICK_IDX = j; break; } }
+    if (nw & 2) PICK_ON = 0;
+    else if (nw & 1) {
+        PICK_ON = 0;
+        if (it_seen(&t[PICK_IDX])) { u32 zone[6] = {0, 0, 0, 0, 0, t[PICK_IDX].list}; ZBUSY = 1; ((fn2)0x080073F1)(zone, PLAYER); ZBUSY = 0; }
+    }
+    return 0;
+}
+static void it_draw(void) {
+    if (!PICK_ON || !it_ptr) return;
+    const it_t *t = (const it_t *)it_ptr;
+    if (PICK_SHOWN != PICK_IDX + 1) {
+        const u32 *s = (const u32 *)t[PICK_IDX].gfx; volatile u32 *v = (volatile u32 *)(0x06010000 + PICK_TILE * 32);
+        for (int i = 0; i < 192 * 32 / 4; i++) v[i] = s[i];
+        PICK_SHOWN = PICK_IDX + 1;
+    }
+    for (int i = 0; i < 3; i++) {                     /* OAM 124-126: 64x32, 256 colours, on top */
+        volatile u16 *o = OAM + (124 + i) * 4;
+        o[0] = 6 | 0x2000 | 0x4000; o[1] = (24 + 64 * i) | 0xC000; o[2] = PICK_TILE + 64 * i;
+    }
+}
+
 void flight_keys(u8 *st) {
     ram_init();
     live_pictures();
-    u32 k = ~(u32)KEYS & 0xFFFF;
+    u32 k = live_it(~(u32)KEYS & 0xFFFF);
     live_save(k);
     ((fn2)0x0804023D)(st, k);
     if (!(~*(u16 *)(st + 2) & 0xF) && st[1] && (*(u16 *)(st + 4) & 0xF)) ((fn0)0x0803FA0D)();

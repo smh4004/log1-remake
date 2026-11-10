@@ -16,7 +16,7 @@ FORMS, FORM_COUNT = 0x6B82EC, 54
 SKILL_ROWS, SKILL_COUNT, SKILL_REF = 0x71DAF8, 24, 0x13618
 SS_SKILL, IT_SKILL, KAME_SKILL, KAIOKEN_SKILL = 20, 14, 15, 24
 BOOK = (7, KAME_SKILL, KAIOKEN_SKILL, SS_SKILL, IT_SKILL)          # Energy Blast, Kamehameha, Kaioken, Super Saiyan, Instant Transmission
-YARDRAT_FLAG = 0                                           # Instant Transmission's flag, once Yardrat exists (0: not yet)
+YARDRAT_FLAG = 402                                         # Instant Transmission: the Yardrat Elder teaches it (log1_yardrat.LEARNED)
 KK_NAME_UI = 1700
 MASTERY_L2, MASTERY_L3 = 100, 250
 CODE, CODE_END = 0xFC0000, 0x1000000
@@ -137,7 +137,7 @@ def compile_code(at):
     return open(b, 'rb').read(), sym
 
 
-def install(r, red):
+def install(r, red, named):
     """red: actors()'s result. Call last: it moves the form table, which log1_start.alive() edits in place."""
     assert set(r[CODE:CODE_END]) <= {0xFF}, 'skills code space is in use'
     clean_rows = bytes(r[SKILL_ROWS:SKILL_ROWS + 24 * SKILL_COUNT]); pal, one = palette(r)
@@ -187,6 +187,8 @@ def install(r, red):
     s20 = SKILL_ROWS + 24 * SS_SKILL
     assert struct.unpack_from('<II', r, s20 + 16) == (0x0801A4C5, 0x0801A513), 'Super Saiyan skill row changed'
     struct.pack_into('<II', table, 24 * SS_SKILL + 16, sym['ss_can'] | 1, sym['ss_use'] | 1); table[24 * SS_SKILL] = 2
+    assert struct.unpack_from('<II', r, SKILL_ROWS + 24 * IT_SKILL + 16) == (0x0801A217, 0x0801A23B), 'Instant Transmission skill row changed'
+    struct.pack_into('<II', table, 24 * IT_SKILL + 16, sym['it_can'] | 1, sym['it_use'] | 1)        # away from enemies: the travel menu
     row = bytearray(clean_rows[24 * SS_SKILL:24 * SS_SKILL + 24]); row[0] = 2
     reds = shifted(pal, one, 0)
     def recolour(icon):

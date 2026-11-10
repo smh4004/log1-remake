@@ -11,7 +11,7 @@ import map_convert as C  # noqa: E402
 BB, WORLD = 0x08000000, 26
 AREAS, COUNT, TABLE_LIT, COUNT_INSN = 0x8E2E0, 452, 0x8A58, 0x125E0     # same values as Gero's tools/areas.py
 # first-listed scouter ID is used until forms are confirmed
-import log1_split, log1_world  # noqa: E402
+import log1_split, log1_world, log1_yardrat  # noqa: E402
 BF_IDX = dict(roshi=186, bulma=41, krillin1=166, krillin2=166, goku=115, chichi=66, piccolo=222, yamcha=302, tien=264, chaitzu=65, kingkai=161, kingyema=163, popo=193, korrin=165, puar=233, dende=77, bubbles=40, gregory=135)
 
 
@@ -103,6 +103,8 @@ def build(r, log1, ids, story, named, actors):
                 while (n, cur) in story.forms: f_, nxt = story.forms[(n, cur)]; boss(nxt, f_, 0); cur = nxt      # the next form takes over
         import worldmap_cond
         foe_i = story.side.install(n, a, fits, r, actors, put, named, spawns, foes_out, follows, walkins, foe_i, BF_IDX, worldmap_cond.cond_code)
+        if n == log1_yardrat.AREA:                           # Yardrat's people (post-game)
+            for b in log1_yardrat.install(n, a, fits, r, actors, put, named, spawns): offs.append(len(recs)); recs += b
         if n == 17:                                          # Officer Pudding stands in the City from the start
             offs.append(len(recs)); recs += bytes(r[story.side.board_rec - 8 - BB:story.side.board_rec - 8 - BB + 36])
         # story characters: waiting until they join the player, then at the escort's end with their after-talk
@@ -136,7 +138,7 @@ def build(r, log1, ids, story, named, actors):
         objs += enemy_objs
         e = bytearray(tmpl); e[0], e[1], e[2], e[3] = WORLD, n + 1, 1, len(exits); struct.pack_into('<I', e, 4, len(objs))
         struct.pack_into('<I', e, 0x10, put(b''.join(exits)) if exits else 0); struct.pack_into('<I', e, 0x14, put(b''.join(struct.pack('<I', o) for o in objs)) if objs else 0)
-        struct.pack_into('<I', e, 0x24, 255 if n >= log1_split.PIC_FIRST else 53 + a.info['music'])   # log1_music; story pictures keep the song that's playing
+        struct.pack_into('<I', e, 0x24, 255 if log1_split.PIC_FIRST <= n < log1_split.PIC_FIRST + log1_split.PICS else 53 + a.info['music'])   # log1_music; story pictures keep the song that's playing
         struct.pack_into('<I', e, 0x0C, log1_world.area_name(n))
         struct.pack_into('<I', e, 0x2C, put(struct.pack('<I', P))); entries.append(bytes(e))
     cnt = COUNT + len(entries); tab = put(bytes(r[AREAS:AREAS + 56 * COUNT]) + b''.join(entries))

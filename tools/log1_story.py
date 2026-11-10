@@ -9,6 +9,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__))); sys.path.ins
 from convert_log1 import chain, conversations, split_line  # noqa: E402
 import log1_pickups as P  # noqa: E402
 from log1_world import takeoff_lists as world_lists  # noqa: E402
+import log1_yardrat  # noqa: E402
 import log1_side  # noqa: E402
 
 QF, TF, EF, TOK, NOOP = 420, 500, 620, 870, 895
@@ -46,7 +47,7 @@ class Story:
         self.bal = balance
         self.sets = conversations(log1); self.names = [l.split()[1] for l in open(log1 + '/assets/areas/SPRITES.txt')]
         d = json.load(open(log1 + '/assets/story/quests.json')); self.q = [x for x in d['quests'] if x['quest'] <= last_quest]; self.qof = d['quest_of_flag']
-        self.ids, self.por = set(ids), portraits or {}; self.scenes = {s['scene']: s for s in json.load(open(scenes_json))}
+        self.ids, self.por, self.log1dir = set(ids), portraits or {}, log1; self.scenes = {s['scene']: s for s in json.load(open(scenes_json))}
         self.scene_spawns = []; self.out = []; self.doors = collections.defaultdict(list); self.walks = []; self.hostile = {}; self.deaths = {}; self.log = collections.Counter(); self.state = {}
         self.pick = {}; self.area_sets = set()
         for n in ids:
@@ -396,6 +397,7 @@ class Story:
             spot = next(((t['to_x'], t['to_y']) for m in self.areas.values() for t in m['triggers'] if t['kind'] == 'warp' and t['to_area'] == n), None)
             if not spot: spot = next(((b['x'], b['y']) for x in self.q for b in x['actions'] if b['type'] == 'warp' and b['area'] == n), None)
             if not spot: spot = next(((b['to_x'], b['to_y']) for x in self.q for b in x['actions'] if b['type'] == 'add_warp' and b['to_area'] == n), None)
+            if not spot and n == log1_yardrat.AREA: spot = tuple(a['start'])
             if not spot: spot = next(((t['x'] - 20, t['y']) for t in a['actors']), (64, 64))
             r += ['list dbg_%d' % n, 'set_flag %d' % NOOP] + self.warp(n, *spot) + ['stop']
             if self.bal: r += ['list dbgx_%d' % n, 'set_flag %d' % NOOP, 'do call 194 %d' % self.bal.exp[self.bal_level(n) + 1], 'stop']
@@ -446,6 +448,6 @@ class Story:
     def generate(self, path):
         self.out += ['list new_game_opening', 'set_flag %d' % NOOP, 'do call 120 1; call 29 958; call 136 4', 'do call 119 26 1 1 %d %d; call 136 2; call 121 15' % NEW_GAME_SPOT, 'stop']
         self.out += ['list game_saved', 'narrate Game saved.']
-        chk = self.check_list(); self.talk_lists(); self.place_lists(); self.pickup_lists(); self.zone_lists(); self.out = chk + self.out + world_lists(self.ids) + self.test_warps() + self.side.lists()
+        chk = self.check_list(); self.talk_lists(); self.place_lists(); self.pickup_lists(); self.zone_lists(); self.out = chk + self.out + world_lists(self.ids) + self.test_warps() + self.side.lists() + log1_yardrat.lists(self, self.log1dir)
         open(path, 'w', encoding='utf-8').write('\n'.join(self.out) + '\n')
         return dict(lines=sum(l.startswith('say') or l.startswith('narrate') for l in self.out), steps=len(self.out), doors=sum(map(len, self.doors.values())), hostile=len(self.hostile), walks=len(self.walks), flags_state=sum(map(len, self.state.values())), log=dict(self.log))

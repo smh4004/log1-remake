@@ -25,10 +25,11 @@ class Actors:
         self.enemies = {e['name']: e for e in csv.DictReader(open(log1_dir + '/assets/tables/enemies.csv'))}; self.rows = {}; self.next_row = 60
         self.row_map = self.log1[0x15A69C:0x15A69C + 109]; self.csv = list(csv.DictReader(open(log1_dir + '/assets/tables/enemies.csv')))
 
-    def actor(self, sprite, enemy):
-        key = (sprite, enemy)
+    def actor(self, sprite, enemy, tint=None, look=None):
+        """tint, look: a recoloured copy (log1_yardrat's Yardrats), kept apart by its look's name."""
+        key = (sprite, enemy) + ((look,) if look else ())
         if key in self.ids: return self.ids[key]
-        rec = S.record(self.log1, self.log1[S.SETS + self.names.index(sprite)]); cmap = S.colour_map(self.log1, rec, self.r)
+        rec = S.record(self.log1, self.log1[S.SETS + self.names.index(sprite)]); cmap = S.colour_map(self.log1, rec, self.r, tint)
         tp = self.table[T_ENEMY if enemy else T_NPC] - BB; n = struct.unpack_from('<I', self.r, tp)[0] & 0xFF; R = bytearray(self.r[tp:tp + 0x54 + 4 * n]); struct.pack_into('<I', R, 0x50, 0); ok = 0
         plan = {0: [17, 0], 1: [0, 1], 7: [5]}
         for i in range(n):

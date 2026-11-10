@@ -27,16 +27,20 @@ NAMEK_RECT = (NAMEK_AT[0] - 40, NAMEK_AT[1] - 40, NAMEK_AT[0] + 56, NAMEK_AT[1] 
 MAP_SONG = 11                                                        # LoG1 plays this song when Goku leaves by Nimbus (quests 3 and 52), so it's its flying music
 MAP_RECORD = 0x2AD8BC                                                # 0:50's map: +0x24 billboard count, +0x28 records, +0x2C 8bpp graphic
 PLACES = [(0, 'roshi', "Roshi's Island"), (2, 'east_district', "Goku's House"), (4, 'fukurou', 'Forest'), (5, 'sw_forest', 'Village'), (9, 'nataday', 'Crash Site'),
-          (15, 'lookout', "Kami's Lookout"), (17, 'west_city', 'City'), (22, 'pilaf', 'Military Base'), (23, 'diablo', 'Battlegrounds'), (24, 'airship', 'Namek')]
+          (15, 'lookout', "Kami's Lookout"), (17, 'west_city', 'City'), (22, 'pilaf', 'Military Base'), (23, 'diablo', 'Battlegrounds'), (24, 'airship', 'Namek'), (69, 'kyodai', 'Yardrat')]
+YARDRAT_AT = (3216, 1860)                                           # a second planet, in the open sea far south-east, also away from every place
+YARDRAT_RECT = (YARDRAT_AT[0] - 40, YARDRAT_AT[1] - 40, YARDRAT_AT[0] + 56, YARDRAT_AT[1] + 56)
+POSTGAME = 420 + 68                                                 # Yardrat opens once the story has ended
+SKY = ('airship', 'kyodai')                                          # Namek and Yardrat: entered by rising into them (worldmap.ASCENDED)
 RECTS = {'west_city': (1193, 1137, 1312, 1296), 'east_district': (2632, 1465, 2712, 1536), 'roshi': (2833, 1633, 2944, 1744), 'lookout': (593, 1025, 704, 1128), 'airship': NAMEK_RECT, 'diablo': (1505, 985, 1648, 1144),
-         'pilaf': (2249, 1521, 2360, 1624), 'nataday': (2161, 857, 2232, 928), 'sw_forest': (825, 1761, 904, 1840), 'fukurou': (721, 809, 864, 944)}
+         'pilaf': (2249, 1521, 2360, 1624), 'nataday': (2161, 857, 2232, 928), 'sw_forest': (825, 1761, 904, 1840), 'fukurou': (721, 809, 864, 944), 'kyodai': YARDRAT_RECT}
 
 
 # Banner names. LoG1 has no names of its own, so these are read off where each area sits in the story; rooms use the place they're in.
 AREA_NAMES = {0: "Roshi's Island", 1: 'Kame House', 2: "Goku's House", 3: 'Snake Way', 4: 'Forest', 5: 'Village', 6: 'Village', 7: 'Village', 8: 'Village', 9: 'Crash Site', 10: "Kami's Lookout",
               11: 'Snake Way', 12: 'Other World', 13: "King Kai's Planet", 14: "King Kai's Planet", 15: "Kami's Lookout", 16: 'Wilderness', 17: 'City', 18: 'City', 19: 'City', 20: 'Capsule Corp', 21: 'City',
               22: 'Military Base', 23: 'Battlegrounds', 24: 'Namek', 25: 'Namek', 26: 'Namek', 27: 'Namek', 28: 'Namek', 30: 'Namek', 31: 'Namek', 32: 'Namek', 33: 'Namek', 34: 'Frieza Base', 35: 'Frieza Base',
-              36: 'Frieza Base', 37: 'Frieza Base', 38: 'Frieza Base', 39: 'Frieza Base', 40: 'Namek', 41: 'Namek'}
+              36: 'Frieza Base', 37: 'Frieza Base', 38: 'Frieza Base', 39: 'Frieza Base', 40: 'Namek', 41: 'Namek', 69: 'Yardrat'}
 for _k in range(42, 54): AREA_NAMES[_k] = 'Namekian Temple'
 NAME_UI = {}
 for _n in sorted(set(AREA_NAMES.values())): NAME_UI[_n] = UI + len(PLACES) + len(NAME_UI)
@@ -79,17 +83,19 @@ def spots(log1, ids, arrival):
             aw = [a for x in q for a in x['actions'] if a['type'] == 'add_warp' and a['to_area'] == n]
             if w: out[n] = (w[0]['x'], w[0]['y'])
             elif aw: out[n] = (aw[0]['to_x'], aw[0]['to_y'])
+            elif n == 69: out[n] = tuple(json.load(open('%s/assets/areas/area69.json' % log1))['start'])     # Yardrat: no doors in
     return out
 
 
 def install(r, log1, ids, world, at=0xAE0000):
     assert r[at:at + 16] == b'\xff' * 16, 'world map data would overwrite something'
-    pos = spots(log1, ids, None); cfg = dict(locations=[dict(key=bf, bf=bf, ui=UI + i, rect=RECTS[bf], dests=[dict(when='set:%d' % (VISIT + n), to=[world, n + 1, *pos[n]])]) for i, (n, bf, name) in enumerate(PLACES) if n in pos])
+    pos = spots(log1, ids, None); cfg = dict(locations=[dict(key=bf, bf=bf, ui=UI + i, rect=RECTS[bf], dests=[dict(when='set:%d' % (POSTGAME if n == 69 else VISIT + n), to=[world, n + 1, *pos[n]])]) for i, (n, bf, name) in enumerate(PLACES) if n in pos])
     path = os.path.join(ROOT, 'out', 'slice', 'world.json'); json.dump(cfg, open(path, 'w'))
     worldmap.landing_code = landing_code; e = _entry_any(r, 0, 50); r[e + 4] = 0              # Buu's Fury's map enemies would be out of place and far too strong
     struct.pack_into('<I', r, e + 0x24, 53 + MAP_SONG)
     res = worldmap.apply(r, path, at)
-    add_namek(r, res[0], e)
+    at = add_namek(r, res[0], e)
+    add_planet(r, at, e, 'kyodai', YARDRAT_AT, YARDRAT_RECT, yardrat_frame())
     return res
 
 
@@ -108,6 +114,25 @@ def add_namek(r, at, e):
     for i in L + [N]:
         struct.pack_into('<I', r, xp + 8 * i, 0); o = struct.unpack_from('<I', r, xp + 8 * i + 4)[0] - B; struct.pack_into('<4H', r, o + 8, *NAMEK_RECT)
     for i in L: struct.pack_into('<I', r, struct.unpack_from('<I', r, xp + 8 * i + 4)[0] - B + 4, worldmap.ASCENDED)
+    return at
+
+
+def add_planet(r, at, e, key, xy, rect, fr):
+    """Another floating billboard, as add_namek: its frame appended to the map's graphic and the place `key`'s exits moved under it."""
+    B = 0x08000000; m = MAP_RECORD; n, recs, gfx = struct.unpack_from('<III', r, m + 0x24); t, s = struct.unpack_from('<II', r, gfx - B)
+    assert t == 0, 'the map graphic should be stored raw by add_namek'
+    data = bytes(r[gfx - B + 8:gfx - B + 8 + s]); tile = len(data) // 32
+    def put(b):
+        nonlocal at
+        a = at; r[a:a + len(b)] = b; at = (a + len(b) + 3) & ~3; assert at <= 0xAFFF00; return B + a
+    new = data + b''.join(fr[y:y + 8, x:x + 8].tobytes() for y in range(0, 32, 8) for x in range(0, 32, 8))
+    x, y = xy; rec = bytes(r[recs - B:recs - B + 24 * n]) + struct.pack('<4IHHI', x, y, x + 32, y + 32, 0x2000, 0x8000, (0x138 << 16) | tile)
+    struct.pack_into('<III', r, m + 0x24, n + 1, put(rec), put(struct.pack('<II', 0, len(new)) + new))
+    xp = struct.unpack_from('<I', r, e + 0x10)[0] - B; L, N = worldmap.BF_PLACES[key]
+    for i in L + [N]:
+        struct.pack_into('<I', r, xp + 8 * i, 0); o = struct.unpack_from('<I', r, xp + 8 * i + 4)[0] - B; struct.pack_into('<4H', r, o + 8, *rect)
+    for i in L: struct.pack_into('<I', r, struct.unpack_from('<I', r, xp + 8 * i + 4)[0] - B + 4, worldmap.ASCENDED)
+    return at
 
 
 def takeoff_lists(ids):
@@ -115,8 +140,33 @@ def takeoff_lists(ids):
     out = []
     for n, bf, _ in PLACES:
         if n not in ids: continue
-        x0, y0, x1, y1 = RECTS[bf]; out += ['list fly_%d' % n, 'do call 120 20; call 118 0 50 0 %d %d; call 121 20' % ((x0 + x1) // 2, (y0 + y1) // 2), 'stop']
+        x0, y0, x1, y1 = RECTS[bf]; y = (y0 + y1) // 2 if bf not in SKY else y1 + 48      # a place up in the sky takes you back in if you start inside it
+        out += ['list fly_%d' % n, 'do call 120 20; call 118 0 50 0 %d %d; call 121 20' % ((x0 + x1) // 2, y), 'stop']
     return out
+
+
+def yardrat_frame():
+    """Yardrat as a 32x32 billboard, drawn from scratch: a lilac planet with teal seas and a band of cloud. Colours are indexes into the world map's OBJ palette."""
+    import numpy as np
+    ramp, sea, cloud, edge = YARDRAT_COLOURS['land'], YARDRAT_COLOURS['sea'], YARDRAT_COLOURS['cloud'], YARDRAT_COLOURS['edge']
+    out = np.zeros((32, 32), np.uint8); cx, cy, R = 15.5, 15.5, 14.5
+    def land(x, y):
+        s = 0
+        for bx, by, br in ((-.3, -.45, .38), (.45, -.15, .35), (-.2, .35, .4), (.5, .6, .2)): s = max(s, 1 - ((x - bx) ** 2 + (y - by) ** 2) / br ** 2)
+        return s > 0
+    for j in range(32):
+        for i in range(32):
+            x, y = (i - cx) / R, (j - cy) / R; d = x * x + y * y
+            if d > 1: continue
+            z = (1 - d) ** .5; light = max(0, -.5 * x - .6 * y + .62 * z); k = light + (.06 if (i + j) & 1 else -.06)
+            c = ramp if land(x, y) else sea; v = c[min(len(c) - 1, int(k * len(c)))]
+            if d > .86: v = edge if light < .25 else c[0]
+            if abs(y - .05 - .3 * x) < .045 and d < .85 and (i % 6) > 1: v = cloud
+            out[j, i] = v
+    return out
+
+
+YARDRAT_COLOURS = dict(land=[86, 169, 90, 91, 137], sea=[186, 252, 198, 254], cloud=120, edge=111)     # read off the map's OBJ palette in the harness
 
 
 def namek_frame():

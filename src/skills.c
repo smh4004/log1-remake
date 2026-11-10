@@ -352,6 +352,27 @@ void combat_hook(void *defender, int *hit) {
     hit[1] = scale;
     if (stats) { stats[0] = strength; stats[1] = power; }
 }
+/* Instant Transmission (Yardrat, post-game). Near an enemy it is Buu's Fury's own move; anywhere else it costs nothing and opens src/flight.c's
+   picker of the places Goku has been. */
+#define IT_Can ((int (*)(u8 *))0x0801A217)
+#define IT_Use ((void (*)(u8 *, void *))0x0801A23B)
+#define IT_PENDING (*(volatile u8 *)0x03005F93)
+static int foe_near(void) {
+    const u32 *l = (const u32 *)0x03001BB0; u8 *me = PLAYER_OBJ;
+    int i, n = l[0], px, py;
+    if (!me) return 0;
+    px = *(int *)(me + 0x1A0) >> 8; py = *(int *)(me + 0x1A4) >> 8;
+    for (i = 0; i < n && i < 32; i++) {
+        const u8 *e = (const u8 *)l[1 + i]; int dx, dy;
+        if (!e) continue;
+        dx = (*(const int *)(e + 0x1A0) >> 8) - px; dy = (*(const int *)(e + 0x1A4) >> 8) - py;
+        if (dx > -160 && dx < 160 && dy > -120 && dy < 120) return 1;
+    }
+    return 0;
+}
+int it_can(u8 *record) { return foe_near() ? IT_Can(record) : 1; }
+void it_use(u8 *record, void *sprite) { if (foe_near()) IT_Use(record, sprite); else IT_PENDING = 1; }
+
 /* The player's keys (vtable 0x0804C9F0 +0x84), every frame: Kaioken's bar, the book now and then, and the quick wheel: hold L and press a
    direction to pick a skill at once (up the 1st, right the 2nd, down the 3rd, left the 4th). Not while flying, where L takes off to the world map
    (src/flight.c), nor on that map (Buu's Fury's 0:50). */

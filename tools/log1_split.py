@@ -16,7 +16,10 @@ ALL = [n for n in range(42) if n != AREA]
 PIC_FIRST, PICS, PIC_TABLE = 54, 15, 0x5C2198                          # LoG1's full-screen story pictures, each added as a one-screen area
 
 
-def ids(): return ALL + [FIRST + k for k in range(12)] + [PIC_FIRST + k for k in range(PICS)]
+YARDRAT = 69                                                           # tools/log1_yardrat.py: a post-game area after the pictures
+
+
+def ids(): return ALL + [FIRST + k for k in range(12)] + [PIC_FIRST + k for k in range(PICS)] + [YARDRAT]
 
 
 def add_pictures(L, out):

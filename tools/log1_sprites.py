@@ -25,9 +25,9 @@ def palette(d, rec):
     return np.array([[(x & 31) * 255 // 31, (x >> 5 & 31) * 255 // 31, (x >> 10 & 31) * 255 // 31] for x in v], np.uint8)
 
 
-def colour_map(d, rec, bf):
-    """LoG1 palette index -> BF OBJ palette index (index 0 stays transparent)."""
-    obj = mapkit.palette(bf)[256:]; P = lab(obj[1:]); Q = lab(palette(d, rec))
+def colour_map(d, rec, bf, tint=None):
+    """LoG1 palette index -> BF OBJ palette index (index 0 stays transparent). tint: a function of the 16 RGB colours, for a recoloured character."""
+    obj = mapkit.palette(bf)[256:]; P = lab(obj[1:]); Q = lab(tint(palette(d, rec)) if tint else palette(d, rec))
     m = (1 + ((Q[:, None] - P[None]) ** 2).sum(2).argmin(1)).astype(np.uint8); m[0] = 0
     return m
 
