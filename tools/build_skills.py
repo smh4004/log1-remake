@@ -15,9 +15,10 @@ B = 0x08000000
 FORMS, FORM_COUNT = 0x6B82EC, 54
 SKILL_ROWS, SKILL_COUNT, SKILL_REF = 0x71DAF8, 24, 0x13618
 SS_SKILL, IT_SKILL, KAME_SKILL, KAIOKEN_SKILL, SPIRIT_SKILL, SOLAR_SKILL = 20, 14, 15, 24, 19, 25
-GALICK_SKILL, SBC_SKILL, DISC_SKILL = 26, 27, 28                        # the allies' beams (log1_party): Vegeta's Galick Gun, Piccolo's Special Beam Cannon
+GALICK_SKILL, SBC_SKILL, DISC_SKILL, SCATTER_SKILL = 26, 27, 28, 29                        # the allies' beams (log1_party): Vegeta's Galick Gun, Piccolo's Special Beam Cannon
 NATIVES, JOIN_NATIVE, JOIN_OLD = 0x55098, 0xE8, 0x08003891   # party_join: a native no script calls (BFU's choice)
 BEAM_PARAMS, BEAM_VT = 0x71DA68, 0x4D9F8
+BLAST_VT = 0x4DC14                                         # Energy Blast's behaviour
 BALL_PARAMS, BALL_VT = 0x76ACC0, 0x4D05C                 # Big Bang's: levels 1 and 2 cyan ball, level 3 gold
 DISC_POWER = (1.25, 1.25, 1.3)
 COMBO = os.path.join(ROOT, 'rom', 'log12.gba')            # the LoG I & II cart: LoG2 from 0x800000 (BFU's USA-cart offsets, moved to it)
@@ -52,6 +53,8 @@ def ui_text(path):
         f.write('[ui:%d]\n= Press the B Button and hold it to charge, then release to fire a thin, piercing beam from two fingers.\n\n' % (KK_NAME_UI + 9))
         f.write('[ui:%d]\n= Destructo Disc\n\n' % (KK_NAME_UI + 10))
         f.write('[ui:%d]\n= Hold the B Button to form a spinning disc of energy, then let go to throw it. It cuts through almost anything.\n\n' % (KK_NAME_UI + 11))
+        f.write('[ui:%d]\n= Scatter Shot\n\n' % (KK_NAME_UI + 12))
+        f.write('[ui:%d]\n= Press the B Button to fire five ki blasts at once, fanned out in front of you. Costs three Energy Blasts\' worth of EP.\n\n' % (KK_NAME_UI + 13))
         f.write('[ui:%d]\n= Kaioken\n\n' % KK_NAME_UI)
         f.write('[ui:%d]\n= Press the B Button for the Kaioken: attacks hit 1.25x as hard, up to 1.75x as you master it, but it wears on your health. Not with Super Saiyan. Press it again to change back.\n\n' % (KK_NAME_UI + 1))
 
@@ -242,6 +245,8 @@ def install(r, red, named, party=None):
     table += beam_rows(r, pal, one, put, fill, sym, clean_rows)
     assert len(table) == 24 * DISC_SKILL
     table += disc_row(r, pal, one, put, fill, sym, clean_rows)
+    assert len(table) == 24 * SCATTER_SKILL
+    table += scatter_row(r, pal, one, put, sym, clean_rows)
     # the effect slot's methods (0 delete, 2 update every frame)
     vt = sym['spirit_vt'] - B
     for k, name in enumerate(('spirit_destroyed', 'spirit_nop', 'spirit_update', 'spirit_nop', 'spirit_nop', 'spirit_nop')):
@@ -273,6 +278,20 @@ def install(r, red, named, party=None):
         fill('party_skills', b''.join(bytes([len(m)] + list(m) + [0] * (7 - len(m))) for m in (log1_party.SKILLS.get(c, ()) for c in range(8))))
         fill('party_lean', b''.join(bytes(log1_party.LEAN.get(c, (100, 100, 100))) for c in range(8)))
     return {'code': len(code), 'end': hex(at), 'forms': kmap, 'party': party_forms}
+
+
+def scatter_row(r, pal, one, put, sym, clean_rows):
+    """Scatter Shot: Energy Blast's row and behaviour, its update swapped for scatter_update (five shots), its icons green."""
+    vt = sym['scatter_vt'] - B
+    for k in range(9):
+        fn = (sym['scatter_update'] | 1) if k == 1 else B + BLAST_VT + struct.unpack_from('<i', r, BLAST_VT + 4 * k)[0]
+        struct.pack_into('<i', r, vt + 4 * k, fn - (B + vt))
+    row = bytearray(clean_rows[24 * 7:24 * 8])
+    green = bytes(0 if v == 0 else one(np.array((int(min(pal[v]) * 0.5), int(max(pal[v])), int(min(pal[v]) * 0.6)))) for v in range(256))
+    struct.pack_into('<II', row, 4, *[put(bytes(r[p - B:p - B + 0x200]).translate(green)) for p in struct.unpack_from('<II', row, 4)])
+    struct.pack_into('<HH', row, 12, KK_NAME_UI + 12, KK_NAME_UI + 13)
+    struct.pack_into('<I', row, 20, sym['scatter_use'] | 1)
+    return bytes(row)
 
 
 def disc_row(r, pal, one, put, fill, sym, clean_rows):

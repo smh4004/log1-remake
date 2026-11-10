@@ -689,3 +689,44 @@ void disc_use(u8 *record, void *sprite) {
     Sprite_SetFacing(sprite, 0x12);
     Sprite_SetBehaviour(sprite, b);
 }
+
+/* Scatter Shot (Piccolo, from LoG2): Energy Blast's behaviour with its own update. Where the Energy Blast fires one shot, this fires five, fanned
+   out across 60 degrees in front of him; each shot is Buu's Fury's own Energy Blast projectile (sub_080197B4), its velocity (+0x40, +0x44) turned. */
+#define SpawnPoint ((void (*)(int *, void *))0x0800FF45)
+#define NewShot ((u8 *(*)(void *, int *, void *, int))0x080197B5)
+__attribute__((section(".text.fixed"))) const int scatter_vt[9] = {1};
+static const short spread[5][3] = {{222, -128, -2}, {247, -66, -1}, {256, 0, 0}, {247, 66, 1}, {222, 128, 2}};    /* cos, sin (x256), side step: -30..30 degrees */
+
+void scatter_update(u8 *self, u8 *player) {
+    u16 t = ++*(u16 *)(player + 0x12);
+    int pos[2], at[2], i, vx, vy, px, py;
+    u8 *s;
+    if (t == 0x10) {
+        player[0x11] = 1;
+        SpawnPoint(pos, player);
+        for (i = 0; i < 5; i++) {
+            s = NewShot(0, pos, player, 1);
+            if (!s) break;
+            vx = *(int *)(s + 0x40); vy = *(int *)(s + 0x44);
+            px = -vy / 32; py = vx / 32;                                 /* 24 px across the facing (speed 768 = 3 px a frame): closer shots clash and stop */
+            at[0] = pos[0] + px * spread[i][2] + vx / 48; at[1] = pos[1] + py * spread[i][2] + vy / 48;     /* and 16 px ahead: only the newest shot ignores its owner, so the rest start clear of him */
+            *(int *)(s + 0x20) = at[0] << 8; *(int *)(s + 0x24) = at[1] << 8;
+            *(int *)(s + 0x40) = (vx * spread[i][0] - vy * spread[i][1]) >> 8;
+            *(int *)(s + 0x44) = (vx * spread[i][1] + vy * spread[i][0]) >> 8;
+            ListAdd(ACTORS, s);
+        }
+    }
+    else if (t >= 0x28) {
+        int *vt = *(int **)player;
+        ((void (*)(void *, int))((u8 *)vt + vt[0x28 / 4]))(player, 0);
+    }
+}
+void scatter_use(u8 *record, void *sprite) {
+    int level = record[record[0x15] * 2 + 0x2E];
+    u32 *b;
+    Spend(record, *(short *)(record + 0x1C) * 3 / 20 + 1);        /* 15% of max EP: three Energy Blasts' worth for five shots */
+    b = Alloc(0xC);
+    if (b) { b[0] = (u32)scatter_vt; *(u8 *)(b + 1) = 0; b[2] = level; }
+    Sprite_SetFacing(sprite, 3);
+    Sprite_SetBehaviour(sprite, b);
+}

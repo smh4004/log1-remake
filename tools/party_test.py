@@ -72,7 +72,7 @@ check('Krillin joins at Kame House', flag(P.KRI_JOINED) and r['bits'] & 1 and r[
 check('and leaves the island with Goku', k not in npcs(), npcs())
 # Piccolo, at the Lookout
 run(w32(0x0300617C, LISTS['15']) + ['300'], 'lk'); p_ = near(P.PICCOLO_NPC['at'], npcs()); talk(*p_, 'pc'); r = rec(P.PICCOLO)
-check('Piccolo joins at the Lookout', flag(P.PIC_JOINED) and r['bits'] & 1 and r['skills'] == [7, 8, 27], r)
+check('Piccolo joins at the Lookout', flag(P.PIC_JOINED) and r['bits'] & 1 and r['skills'] == [7, 29, 8, 27], r)
 # Vegeta, at Capsule Corp
 run(w32(0x0300617C, LISTS['20']) + ['300'], 'cc'); v = near(P.VEGETA_NPC['at'], npcs()); talk(*v, 'vg'); r = rec(P.VEGETA)
 check('Vegeta joins at Capsule Corp, in his armour (LoG1 colours)', flag(P.VEG_JOINED) and r['bits'] & 1 and r['skills'] == [7, 26, 2] and r['form'] == P.FIRST_FORM, r)
@@ -83,7 +83,7 @@ for k, (c, name) in enumerate(((P.PICCOLO, 'Piccolo'), (P.KRILLIN, 'Krillin'), (
     cur[0] = 'brief0'; switch(k + 1, 'as%d' % c)
     check('L + SELECT: switch to %s, who walks' % name, who() == c and moves(), (who(), pos()))
 cur[0] = 'as%d' % P.VEGETA; run(['2 START', '90', 'shot status', '4 B', '60'], 'st'); check('the status page opens as Vegeta', player() >> 24 == 2 and who() == P.VEGETA)
-for c, slot, name in ((P.VEGETA, 1, 'Galick Gun'), (P.VEGETA, 2, 'Big Bang'), (P.PICCOLO, 2, 'Special Beam Cannon'), (P.PICCOLO, 1, 'Energy Punch'), (P.KRILLIN, 1, 'Destructo Disc'), (P.KRILLIN, 2, 'Kamehameha')):
+for c, slot, name in ((P.VEGETA, 1, 'Galick Gun'), (P.VEGETA, 2, 'Big Bang'), (P.PICCOLO, 3, 'Special Beam Cannon'), (P.PICCOLO, 2, 'Energy Punch'), (P.PICCOLO, 1, 'Scatter Shot'), (P.KRILLIN, 1, 'Destructo Disc'), (P.KRILLIN, 2, 'Kamehameha')):
     cur[0] = 'as%d' % c; check('%s fires' % name, fire(c, slot, name.replace(' ', '_')))
 # the gravity room
 cur[0] = 'as%d' % P.VEGETA; talk(120, 112, 'brief'); check('as Vegeta, Dr. Brief opens the gravity room', flag(P.GRAV_OPEN) == 1)

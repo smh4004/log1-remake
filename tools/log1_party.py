@@ -45,10 +45,10 @@ ROWS = [dict(id='vegeta', copy=26, figure='vegeta', owner=4, up='vegeta_ss', por
         dict(id='krillin', copy=48, figure='krillin', owner=2, flags=0x10, portrait='krillin1')]          # Buu's Fury's guest Piccolo row; 0x10: earns EXP
 PORTRAITS = {}                                       # LoG1 speaker -> portrait (speaker id), set by slice_build from log1_portraits
 # moves on joining (src/skills.c party_join): Energy Blast first, as everyone in Buu's Fury. Vegeta: Galick Gun and Big Bang (the owner, Nov 9),
-# and Super Saiyan from the gravity room. Piccolo: Energy Punch and the Special Beam Cannon (his LoG2 moves that Buu's Fury has).
+# and Super Saiyan from the gravity room. Piccolo: his LoG2 moves, Scatter Shot (new: five Energy Blasts fanned out), Energy Punch and the Special Beam Cannon.
 # Krillin: the Destructo Disc, the Kamehameha and the Solar Flare (all his in the series).
 VEGETA, PICCOLO, KRILLIN = 4, 1, 2                                          # their records: Vegeta's own, Gohan's and Goten's (never played here)
-SKILLS = {VEGETA: (7, 26, 2), PICCOLO: (7, 8, 27), KRILLIN: (7, 28, 15, 25)}      # Krillin: Destructo Disc, Kamehameha, Solar Flare
+SKILLS = {VEGETA: (7, 26, 2), PICCOLO: (7, 29, 8, 27), KRILLIN: (7, 28, 15, 25)}      # Krillin: Destructo Disc, Kamehameha, Solar Flare
 LEAN = {VEGETA: (110, 115, 100), PICCOLO: (100, 105, 115), KRILLIN: (95, 100, 95)}       # strength, power, endurance against the player's
 FIRST_FORM = 54 + 2                                                          # Buu's Fury's 54, the two Kaioken rows (build_skills.KAIOKEN), then ROWS
 JOIN = 232                                                                   # native party_join(character, form)
