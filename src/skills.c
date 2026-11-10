@@ -137,6 +137,8 @@ static int earned(int skill) {
     if (skill == KAIOKEN_SKILL || skill == KAME_SKILL) return QFLAG(37);      /* King Kai teaches both, after Gregory */
     if (skill == SS_SKILL) return QFLAG(67);               /* against Frieza */
     if (skill == IT_SKILL) return YARDRAT_FLAG && FLAG(YARDRAT_FLAG);
+    if (skill == SPIRIT_SKILL) return QFLAG(37);                                  /* King Kai again */
+    if (skill == SOLAR_SKILL) return QFLAG(71);                                   /* the Village wise man's reward, after the ending */
     return 1;
 }
 static void learn(int skill) {
@@ -394,3 +396,213 @@ u16 *player_input(void) {
     wheel_keys[1] &= ~0xF0; wheel_keys[2] &= ~0xF0;
     return (u16 *)wheel_keys;
 }
+
+/* ---------- the Spirit Bomb and the Solar Flare (Buu's Fury Ultimate's, ported) ----------
+   Spirit Bomb (King Kai, quest 37; Buu's Fury's unused skill row 19): Goku holds his arms up while the orb grows over his head, then it flies the
+   way he faces and bursts, hitting everything nearby hard. It runs from an effect slot (EFFECTS[3]), which the game updates every frame; the
+   movement states call spirit_tick so Goku holds his pose. The orb is Buu's Fury's own Spirit Bomb, the glowing disc of its ending (the owner,
+   Nov 9: "use the actual spirit bomb sprites", not BFU's drawn orb).
+   Solar Flare (the Village wise man, quest 71, after the ending): a white flash while Goku holds a pose; every ordinary enemy on screen is stunned
+   (the game's own dizzy state, its timer set longer). Bosses aren't fooled. */
+#define Spend ((void (*)(void *, int))0x08013599)
+#define NativeDisc ((void (*)(int *))0x08003B95)
+#define NativeAlpha ((void (*)(int *))0x08000959)
+#define NativeFlash ((void (*)(int *))0x08001305)
+#define SetEffect ((void (*)(void *, int, void *))0x0800927F)
+#define EFFECTS (*(u32 **)(*(u32 *)0x08003C44 + 0x10))
+#define ALPHA_MIRROR (*(u8 **)0x08009900)
+#define RectAt ((void (*)(void *, const void *, int *))0x08052FD5)
+#define HitObjects ((int (*)(void *, int, void *))0x08011C0D)
+#define Quake ((void (*)(int, int))0x0800797D)
+#define CALL_V(obj, off) ((u32 (*)(void *, ...))(*(u32 *)(obj) + *(int *)(*(u32 *)(obj) + (off))))
+#define BLDCNT (*(volatile u16 *)0x04000050)
+#define BLDY (*(volatile u16 *)0x04000054)
+#define BOMB_INDEX 255
+#define BOMB_PAL ((volatile u16 *)0x05000000)[BOMB_INDEX]
+struct spirit { u16 frame; u16 phase; int x, y, r; void *old, *old3; u32 ticker[2]; u8 eva, evb; u16 backdrop; u8 dir, speed; u16 travelled; u8 disc; };
+#define SB (*(struct spirit *)0x03005FA0)              /* 44 bytes */
+#define BOMB_OLD (*(volatile u16 *)0x03005FE4)
+#define SOLAR_POSE (*(volatile u8 *)0x03005FE6)
+#define SOLAR_AT (*(volatile u32 *)0x03005FE8)
+#define GROW_FRAMES 90
+#define WINDUP_FRAMES 10
+#define THROW_HOLD 22
+#define THROW_DISTANCE 130
+#define THROW_SIDE 100
+#define THROW_UP 60
+#define BURST_FRAMES 24
+#define SPIRIT_POWER 0x8000
+#define FLASH_PHASE 11
+static const int BURST_RECT[4] = {-100, -80, 200, 160};
+static const u8 flash_levels[46] = {6, 12, 16, 16, 16, 16, 10, 4, 0, 8, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 16, 15, 14, 14, 13, 12, 12, 11, 10, 10, 9, 8, 8, 7, 6, 6, 5, 4, 4, 3, 2, 2, 1, 0};
+__attribute__((section(".text.fixed"))) const int spirit_vt[6] = {1};
+
+static int has_slot(void *player, int slot) {
+    u8 *actor = (u8 *)*(u32 *)((u8 *)player + 0x58);
+    return (*(u32 *)actor & 0xFF) > (u32)slot && *(u32 *)(actor + 0x54 + slot * 4) != 0;
+}
+static void play_slot(void *player, int slot) {
+    Sprite_SetFacing(player, slot);
+    *(u32 *)((u8 *)player + 0x4C) = 0; *((u8 *)player + 0x11) = 0; *(u16 *)((u8 *)player + 0x12) = 0;
+}
+#define SLOT_ARMS_UP 12
+#define SLOT_THROW 18
+static void slot_pose(void *player, int slot) {
+    u8 *actor = (u8 *)*(u32 *)((u8 *)player + 0x58);
+    if (!has_slot(player, slot)) return;
+    if (*(u32 *)((u8 *)player + 0x50) == *(u32 *)(actor + 0x54 + slot * 4)) return;
+    play_slot(player, slot);
+}
+static int spirit_cost(u8 *rec) { int c = *(u16 *)(rec + 0x1C) / 2; return c < 30 ? 30 : c; }
+int spirit_usable(u8 *rec) { return IN_COMBAT && !SB.phase && !SOLAR_POSE && CanAfford(rec, spirit_cost(rec)); }
+
+static void spirit_draw(void) {
+    if (!SB.disc) {
+        int st[3] = {2, 100, 15};
+        SB.disc = 1; SB.old = (void *)EFFECTS[0]; EFFECTS[0] = 0;
+        SB.eva = ALPHA_MIRROR[2]; SB.evb = ALPHA_MIRROR[3]; SB.backdrop = BOMB_PAL;
+        NativeAlpha(st);
+    }
+    {
+        int st[5] = {4, SB.x, SB.y, SB.r, BOMB_INDEX};
+        NativeDisc(st); BOMB_PAL = 0x7F80;
+    }
+}
+static void impact(int step) {
+    if (step == 0) BOMB_OLD = BLDCNT;
+    if (step < 3 || (step >= 6 && step < 9)) { BLDCNT = 0x00BF; BLDY = 16; }
+    else if (step < 6) { BLDCNT = 0x00FF; BLDY = 16; }
+    else { BLDCNT = BOMB_OLD; BLDY = 0; }
+}
+static void spirit_end(void) {
+    if (SB.disc) { SetEffect(EFFECTS, 0, SB.old); ALPHA_MIRROR[2] = SB.eva; ALPHA_MIRROR[3] = SB.evb; SB.disc = 2; }
+    SB.phase = 4; SB.frame = 0;
+}
+static void spirit_done(void) {
+    if (SB.disc == 2) BOMB_PAL = SB.backdrop;
+    SB.disc = 0; SB.phase = 0; EFFECTS[3] = (u32)SB.old3;
+    { int st[6] = {5, 5, 200, 200, 255, 10}; NativeFlash(st); }
+}
+static void spirit_start_ticker(void) { SB.old3 = (void *)EFFECTS[3]; SB.ticker[0] = (u32)spirit_vt; EFFECTS[3] = (u32)SB.ticker; }
+void spirit_use(u8 *rec, void *player) {
+    int *p = (int *)player;
+    Spend(rec, spirit_cost(rec));
+    SB.disc = 0; SB.x = p[0x68] >> 8; SB.y = (p[0x69] >> 8) - 58; SB.r = 4; SB.frame = 0; SB.phase = 1;
+    spirit_start_ticker();
+    PlaySound((void *)0x03003E5C, (void *)SOUND_MOVE, 0x40, 0);
+    spirit_draw();
+}
+static void spirit_burst(void *player) {
+    u32 hit[16]; int pos[2], i;
+    for (i = 0; i < 16; i++) hit[i] = 0;
+    pos[0] = SB.x; pos[1] = SB.y;
+    *(u8 *)&hit[0] = 1; RectAt(&hit[1], BURST_RECT, pos); *(u8 *)&hit[5] = *((u8 *)player + 0x10);
+    hit[6] = SPIRIT_POWER; hit[7] = 0x086B8098; hit[8] = (u32)player; hit[12] = (u32)player;
+    HitObjects(ACTORS, 0, hit);
+    Quake(0x20, 0x4B);
+    PlaySound((void *)0x03003E5C, (u8 *)SOUND_HIT + 0x30 * 12, 0x40, 0);
+}
+void spirit_nop(void) {}
+void spirit_update(void) {
+    void *player = PLAYER_OBJ;
+    SB.frame++;
+    if (!player) return;
+    if (SB.phase == 1) {
+        if (SB.r < 48 && SB.frame % 2 == 0) SB.r++;
+        spirit_draw();
+        if (SB.frame >= GROW_FRAMES) { SB.phase = 2; SB.frame = 0; SB.dir = *((u8 *)player + 0x10); SB.speed = 0; SB.travelled = 0; }
+    } else if (SB.phase == 2) {
+        if (SB.frame <= WINDUP_FRAMES) SB.y -= 1;
+        else {
+            if (SB.speed < 7 && SB.frame % 3 == 0) SB.speed++;
+            if (SB.dir == 0) SB.y += SB.speed; else if (SB.dir == 1) SB.y -= SB.speed; else if (SB.dir == 2) SB.x -= SB.speed; else SB.x += SB.speed;
+            SB.travelled += SB.speed;
+        }
+        spirit_draw();
+        if (SB.travelled >= (SB.dir == 1 ? THROW_UP : SB.dir == 0 ? THROW_DISTANCE : THROW_SIDE)) { spirit_burst(player); SB.phase = 3; SB.frame = 0; }
+    } else if (SB.phase == 3) {
+        if (SB.frame > BURST_FRAMES - 10) SB.r -= 8; else if (SB.r < 96) SB.r += 4;
+        spirit_draw();
+        if (SB.frame <= 10) impact(SB.frame - 1);
+        if (SB.frame % 6 == 0) spirit_burst(player);
+        if (SB.frame >= BURST_FRAMES) spirit_end();
+    } else if (SB.phase == 4) {
+        if (SB.frame >= 2) spirit_done();
+    } else if (SB.phase == FLASH_PHASE) {
+        if (SB.frame > (int)sizeof flash_levels) { BLDCNT = BOMB_OLD; BLDY = 0; SB.phase = 0; EFFECTS[3] = (u32)SB.old3; }
+        else { BLDCNT = 0x00BF; BLDY = flash_levels[SB.frame - 1]; }
+    }
+}
+void spirit_destroyed(void) {           /* a new area clears every effect, this one included */
+    if (SB.phase == FLASH_PHASE) { BLDCNT = BOMB_OLD; BLDY = 0; }
+    SB.phase = 0; SB.disc = 0;
+}
+/* Solar Flare */
+#define SOLAR_COST 40
+#define SOLAR_STUN 150
+#define SOLAR_POSE_FRAMES 30
+#define SOLAR_REST 360
+#define ENEMY_COUNT (*(volatile int *)0x03001BB0)
+#define ENEMY_LIST ((u8 **)0x03001BB4)
+#define VIEW ((volatile int *)0x030019BC)
+#define STUN_DESC 0x0870F51C
+static int stunned(u8 *e) {
+    int depth = *(int *)(e + 0x23C);
+    return depth >= 1 && depth <= 5 && *(u32 *)(e + 0x240 + 8 * (depth - 1) + 4) == STUN_DESC;
+}
+static void stun(u8 *e, int frames) {
+    int depth; u32 *top, *timer;
+    if (!stunned(e)) {
+        depth = *(int *)(e + 0x23C);
+        if (depth < 1 || depth >= 5) return;
+        CALL_V(e, 0x6C)(e, 1);
+        if (!stunned(e)) return;
+    }
+    depth = *(int *)(e + 0x23C);
+    top = *(u32 **)(e + 0x240 + 8 * (depth - 1));
+    if (!top || top[2] < 2) return;
+    timer = (u32 *)top[4];
+    if (timer && timer[1] < (u32)frames) timer[1] = frames;
+}
+static int boss(u8 *e) { const u8 *row = *(const u8 **)(e + 0x224); return !row || *(const u32 *)(row + 0x14) != 0x08708920; }
+int solar_can(u8 *record) { return IN_COMBAT && !SB.phase && !SOLAR_POSE && (!SOLAR_AT || FRAMES - SOLAR_AT >= SOLAR_REST) && CanAfford(record, SOLAR_COST); }
+void solar_use(u8 *record, void *player) {
+    int i, n = ENEMY_COUNT, x, y;
+    (void)player;
+    Spend(record, SOLAR_COST);
+    SOLAR_AT = FRAMES; SB.phase = FLASH_PHASE; SB.frame = 0; BOMB_OLD = BLDCNT;
+    spirit_start_ticker();
+    SOLAR_POSE = SOLAR_POSE_FRAMES;
+    PlaySound((void *)0x03003E5C, (u8 *)SOUND_HIT + 0x288, 0x40, 0);
+    if (n > 32) n = 32;
+    for (i = 0; i < n; i++) {
+        u8 *e = ENEMY_LIST[i];
+        if (!e || *(int *)(e + 0x28C) <= 0 || !*(u8 *)(e + 0x1CC) || *(u8 *)(e + 0x1D0) != 0 || boss(e)) continue;
+        x = *(int *)(e + 0x1A0) >> 8; y = *(int *)(e + 0x1A4) >> 8;
+        if (x < VIEW[0] - 16 || x > VIEW[2] + 16 || y < VIEW[1] - 16 || y > VIEW[3] + 32) continue;
+        stun(e, SOLAR_STUN);
+    }
+}
+static int solar_tick(void *player) {
+    if (!SOLAR_POSE) return 0;
+    if (--SOLAR_POSE == 0) { slot_pose(player, 0); return 0; }
+    if (has_slot(player, 13)) slot_pose(player, 13); else slot_pose(player, SLOT_ARMS_UP);
+    return 1;
+}
+/* the movement states (each vtable +8): while the bomb is raised or the flare held, Goku keeps his pose and doesn't move */
+static int spirit_tick(void *player) {
+    if (solar_tick(player)) return 1;
+    if (SB.phase == 1) { slot_pose(player, SLOT_ARMS_UP); return 1; }
+    if (SB.phase == 2) {
+        if (SB.frame <= WINDUP_FRAMES) { slot_pose(player, SLOT_ARMS_UP); return 1; }
+        if (SB.frame <= WINDUP_FRAMES + THROW_HOLD) { slot_pose(player, SLOT_THROW); return 1; }
+        if (SB.frame == WINDUP_FRAMES + THROW_HOLD + 1) slot_pose(player, 0);
+    }
+    return 0;
+}
+typedef void (*state_fn)(void *, void *, int, int);
+#define WRAP(name, addr) void name(void *s, void *p, int a, int b) { if (spirit_tick(p)) return; ((state_fn)(addr))(s, p, a, b); }
+WRAP(state_a, 0x08012D8B)
+WRAP(state_b, 0x08012DEF)
+WRAP(state_c, 0x08013023)
+WRAP(state_d, 0x080131BB)

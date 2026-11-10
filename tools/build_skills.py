@@ -14,8 +14,8 @@ from wfz import decompress_stream  # noqa: E402
 B = 0x08000000
 FORMS, FORM_COUNT = 0x6B82EC, 54
 SKILL_ROWS, SKILL_COUNT, SKILL_REF = 0x71DAF8, 24, 0x13618
-SS_SKILL, IT_SKILL, KAME_SKILL, KAIOKEN_SKILL = 20, 14, 15, 24
-BOOK = (7, KAME_SKILL, KAIOKEN_SKILL, SS_SKILL, IT_SKILL)          # Energy Blast, Kamehameha, Kaioken, Super Saiyan, Instant Transmission
+SS_SKILL, IT_SKILL, KAME_SKILL, KAIOKEN_SKILL, SPIRIT_SKILL, SOLAR_SKILL = 20, 14, 15, 24, 19, 25
+BOOK = (7, KAME_SKILL, KAIOKEN_SKILL, SPIRIT_SKILL, SS_SKILL, SOLAR_SKILL, IT_SKILL)     # Energy Blast, Kamehameha, Kaioken, Spirit Bomb, Super Saiyan, Solar Flare, Instant Transmission
 YARDRAT_FLAG = 402                                         # Instant Transmission: the Yardrat Elder teaches it (log1_yardrat.LEARNED)
 KK_NAME_UI = 1700
 MASTERY_L2, MASTERY_L3 = 100, 250
@@ -34,6 +34,10 @@ u32 = lambda r, o: struct.unpack_from('<I', r, o)[0]
 
 def ui_text(path):
     with open(path, 'w', encoding='utf-8') as f:
+        f.write('[ui:%d]\n= Spirit Bomb\n\n' % (KK_NAME_UI + 2))
+        f.write('[ui:%d]\n= Press the B Button to raise a Spirit Bomb, then throw it the way you face. It hits everything nearby very hard. Costs half your EP.\n\n' % (KK_NAME_UI + 3))
+        f.write('[ui:%d]\n= Solar Flare\n\n' % (KK_NAME_UI + 4))
+        f.write('[ui:%d]\n= Press the B Button to flash a blinding light: every ordinary enemy on screen is stunned for a few seconds. Bosses are not fooled.\n\n' % (KK_NAME_UI + 5))
         f.write('[ui:%d]\n= Kaioken\n\n' % KK_NAME_UI)
         f.write('[ui:%d]\n= Press the B Button for the Kaioken: attacks hit 1.25x as hard, up to 1.75x as you master it, but it wears on your health. Not with Super Saiyan. Press it again to change back.\n\n' % (KK_NAME_UI + 1))
 
@@ -124,7 +128,7 @@ def thumb_bl(at, to):
 def compile_code(at):
     d = tempfile.mkdtemp(); c, o, e, b, ld = (os.path.join(d, n) for n in ('s.c', 's.o', 's.elf', 's.bin', 's.ld'))
     open(ld, 'w').write('SECTIONS { . = 0x%X; .text : { *(.text*) *(.rodata*) } .data : { *(.data*) *(.bss*) *(COMMON) } /DISCARD/ : { *(.comment) *(.ARM.attributes) } }\n' % (B + at))
-    defs = ['-DSS_SKILL=%d' % SS_SKILL, '-DIT_SKILL=%d' % IT_SKILL, '-DKAME_SKILL=%d' % KAME_SKILL, '-DKAIOKEN_SKILL=%d' % KAIOKEN_SKILL, '-DYARDRAT_FLAG=%d' % YARDRAT_FLAG,
+    defs = ['-DSS_SKILL=%d' % SS_SKILL, '-DIT_SKILL=%d' % IT_SKILL, '-DKAME_SKILL=%d' % KAME_SKILL, '-DKAIOKEN_SKILL=%d' % KAIOKEN_SKILL, '-DSPIRIT_SKILL=%d' % SPIRIT_SKILL, '-DSOLAR_SKILL=%d' % SOLAR_SKILL, '-DYARDRAT_FLAG=%d' % YARDRAT_FLAG,
             '-DMASTERY_L2=%d' % MASTERY_L2, '-DMASTERY_L3=%d' % MASTERY_L3]
     subprocess.check_call(['arm-none-eabi-gcc', '-mthumb', '-mcpu=arm7tdmi', '-Os', '-ffreestanding', '-fno-builtin', '-nostdlib', '-fshort-wchar', *defs, '-c', os.path.join(ROOT, 'src', 'skills.c'), '-o', o])
     subprocess.check_call(['arm-none-eabi-gcc', '-mthumb', '-mcpu=arm7tdmi', '-nostdlib', '-T', ld, '-Wl,-e,player_input', o, '-lgcc', '-o', e])
@@ -200,6 +204,25 @@ def install(r, red, named):
     struct.pack_into('<HHII', row, 12, KK_NAME_UI, KK_NAME_UI + 1, sym['kaioken_can'] | 1, sym['kaioken_use'] | 1)
     assert len(table) == 24 * KAIOKEN_SKILL
     table += row
+    # Spirit Bomb: Buu's Fury's unused row 19, with the Kamehameha's icons and no level. Solar Flare: Burning Attack's row (4) with pale icons, no level.
+    assert struct.unpack_from('<II', clean_rows, 24 * SPIRIT_SKILL + 16) == (0x08019D25, 0x08019D29), 'skill row 19 is in use'
+    sb = bytearray(clean_rows[24 * KAME_SKILL:24 * KAME_SKILL + 24]); sb[0] = 0xFF
+    struct.pack_into('<HHII', sb, 12, KK_NAME_UI + 2, KK_NAME_UI + 3, sym['spirit_usable'] | 1, sym['spirit_use'] | 1); table[24 * SPIRIT_SKILL:24 * SPIRIT_SKILL + 24] = sb
+    pale = bytes(0 if v == 0 else one(np.array([min(255, int(c) + 90) for c in pal[v]])) for v in range(256))
+    sf = bytearray(clean_rows[24 * 4:24 * 5]); sf[0] = 0xFF
+    def recolour_with(icon, remap):
+        a = np.zeros((16, 32), np.uint8)
+        for t in range(8): a[t // 4 * 8:t // 4 * 8 + 8, t % 4 * 8:t % 4 * 8 + 8] = np.frombuffer(bytes(icon[t * 64:t * 64 + 64]), np.uint8).reshape(8, 8)
+        w = a[2:11, 2:20]; a[2:11, 2:20] = np.frombuffer(remap, np.uint8)[w]
+        return b''.join(a[t // 4 * 8:t // 4 * 8 + 8, t % 4 * 8:t % 4 * 8 + 8].tobytes() for t in range(8))
+    struct.pack_into('<II', sf, 4, *[put(recolour_with(r[p - B:p - B + 0x200], pale)) for p in struct.unpack_from('<II', sf, 4)])
+    struct.pack_into('<HHII', sf, 12, KK_NAME_UI + 4, KK_NAME_UI + 5, sym['solar_can'] | 1, sym['solar_use'] | 1)
+    assert len(table) == 24 * SOLAR_SKILL
+    table += sf
+    # the effect slot's methods (0 delete, 2 update every frame)
+    vt = sym['spirit_vt'] - B
+    for k, name in enumerate(('spirit_destroyed', 'spirit_nop', 'spirit_update', 'spirit_nop', 'spirit_nop', 'spirit_nop')):
+        struct.pack_into('<i', r, vt + 4 * k, (sym[name] | 1) - (B + vt))
     struct.pack_into('<I', r, SKILL_REF, put(bytes(table)))
     # hooks
     def site(at_, want, new):
@@ -213,6 +236,9 @@ def install(r, red, named):
          bytes.fromhex('201c291c024b') + thumb_bl(0xBCAE + 6, 0x46AA6) + bytes.fromhex('02e0c046') + struct.pack('<I', sym['skills_hud'] | 1))
     # Buu's Fury's level-up script asks the level of moves Goku may not hold yet here (sub_08013BCC asserts on a missing one): a missing move is level 0
     site(0x13BEE, 'ff228e320023', bytes.fromhex('002010bdc046'))
+    for vt_, want, name in ((0x4C384, 0x08012D8B, 'state_a'), (0x4BEF0, 0x08012DEF, 'state_b'), (0x4C790, 0x08013023, 'state_c'), (0x4C3A8, 0x080131BB, 'state_d')):
+        assert B + vt_ + struct.unpack_from('<i', r, vt_ + 8)[0] == want, 'state vtable changed at 0x%X' % vt_     # the movement states: Spirit Bomb and Solar Flare poses
+        struct.pack_into('<i', r, vt_ + 8, (sym[name] | 1) - (B + vt_))
     for vt_, slot, want, name in ((0x4C9F0, 0x84, 0x0804F8C9, 'player_input'), (0x4B024, 4, 0x080171A9, 'skilltab_setup'), (0x4B024, 40, 0x080175FD, 'skilltab_keys')):
         assert B + vt_ + struct.unpack_from('<i', r, vt_ + slot)[0] == want, 'vtable changed at 0x%X' % (vt_ + slot)
         struct.pack_into('<i', r, vt_ + slot, (sym[name] | 1) - (B + vt_))
