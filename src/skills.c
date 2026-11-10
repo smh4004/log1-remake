@@ -386,6 +386,7 @@ u16 *player_input(void) {
     static const u8 pick[4] = {1, 3, 0, 2};
     int d, i;
     kk_track();
+    if (CUR == 4) FLAGS[AS_VEGETA >> 3] |= 1 << (AS_VEGETA & 7); else FLAGS[AS_VEGETA >> 3] &= ~(1 << (AS_VEGETA & 7));     /* the gravity room's holograms are for Vegeta */
     rec_of(0)[0] |= 1;      /* Goku is in the party: the pause menu lists party members (record +0 bit 0) and, with none, reads a stale entry and crashes */
     if (CUR == 0 && (FRAMES & 63) == 0) skills_sync();
     if (!(keys[1] & 0x200) || FLYING || (AREA && *(u16 *)AREA == (0 | 50 << 8))) return keys;
@@ -608,3 +609,83 @@ WRAP(state_a, 0x08012D8B)
 WRAP(state_b, 0x08012DEF)
 WRAP(state_c, 0x08013023)
 WRAP(state_d, 0x080131BB)
+
+/* ---------- post-game allies (tools/log1_party.py) ---------- */
+/* Script native party_join(character, form), BFU's party_join: the first time someone joins, they start level with whoever is playing (EXP, max HP
+   and EP, and stats leaning their own way), with their own moves. Later calls change nothing. */
+__attribute__((section(".text.table"))) volatile const u8 party_skills[8][8] = {{0}};      /* per character: count, then moves */
+__attribute__((section(".text.table"))) volatile const u8 party_lean[8][3] = {{0}};        /* strength, power, endurance, in % of the player's */
+#define R16(r, o) (*(u16 *)((r) + (o)))
+#define EXP(r) (*(u32 *)((r) + 0x24))
+static int scaled(int v, int pct) { v = v * pct / 100; return v > 255 ? 255 : v; }
+void party_join(int *sp) {
+    int n = *sp, form = sp[n], c = sp[n - 1], i, v;
+    u8 *r = rec_of(c), *cur = rec_of(CUR);
+    *sp = n - 2;
+    if (c < 1 || c > 7 || (r[0] & 1)) return;
+    r[0] |= 1;
+    r[0x14] = form;
+    if (EXP(cur) > EXP(r)) EXP(r) = EXP(cur);
+    if (R16(cur, 0x18) > R16(r, 0x18)) R16(r, 0x18) = R16(cur, 0x18);
+    if (R16(cur, 0x1C) > R16(r, 0x1C)) R16(r, 0x1C) = R16(cur, 0x1C);
+    R16(r, 0x16) = R16(r, 0x18); R16(r, 0x1A) = R16(r, 0x1C);
+    for (i = 0; i < 3; i++) { v = scaled(cur[0x28 + i], party_lean[c][i]); if (v > r[0x28 + i]) r[0x28 + i] = v; }
+    if (cur[0x2B] > r[0x2B]) r[0x2B] = cur[0x2B];
+    r[0x0C] = party_skills[c][0];
+    for (i = 0; i < party_skills[c][0]; i++) { r[0x0D + i] = party_skills[c][1 + i]; r[0x2E + 2 * i] = r[0x2F + 2 * i] = 0; }
+    r[0x15] = 0;
+}
+
+/* Galick Gun and Special Beam Cannon: the Kamehameha's code with their own frames (BFU's beam_start). Its start makes the charging ball from its
+   parameter table, so this runs it, then points the ball at the same entry of the move's own table. */
+#define Kamehameha_Start ((void (*)(u32 *, void *))0x0801BDD5)
+__attribute__((section(".text.table"))) volatile const u32 galick_params[12] = {1}, sbc_params[12] = {1};
+__attribute__((section(".text.fixed"))) const int galick_vt[9] = {1}, sbc_vt[9] = {1};
+static void beam_start(u32 *self, void *player, const volatile u32 *params) {
+    u32 *beam;
+    Kamehameha_Start(self, player);
+    beam = (u32 *)self[2];
+    if (beam) {                                /* the charging ball's frames, and its first frame already copied to VRAM */
+        const volatile u32 *mine = &params[self[3] * 4];
+        beam[0x40 / 4] = (u32)mine;
+        beam[0x44 / 4] = beam[0x48 / 4] = beam[0x4C / 4] = mine[2];
+        MemCopy((u8 *)0x06010000 + *(u16 *)(beam + 3) * 0x20, (void *)((u32 *)mine[2])[2], 0x40);
+    }
+}
+static void beam_use(u8 *record, void *sprite, const int *vt) {
+    int level = record[record[0x15] * 2 + 0x2E];
+    u32 *b = Alloc(0x10);
+    if (b) { b[0] = (u32)vt; b[1] = 0; b[3] = level; }
+    Sprite_SetFacing(sprite, 0x12);
+    Sprite_SetBehaviour(sprite, b);
+}
+void galick_start(u32 *self, void *player) { beam_start(self, player, galick_params); }
+void sbc_start(u32 *self, void *player) { beam_start(self, player, sbc_params); }
+void galick_use(u8 *record, void *sprite) { beam_use(record, sprite, galick_vt); }
+void sbc_use(u8 *record, void *sprite) { beam_use(record, sprite, sbc_vt); }
+
+/* Destructo Disc: Big Bang's code with its own frames and strength (BFU's Eraser Cannon). Big Bang's start makes the ball from its parameter table,
+   so this runs it, then points the ball at the same entry of the move's table (the last word of an entry scales the damage). */
+#define BigBang_Start ((void (*)(u32 *, void *))0x0801A7C1)
+__attribute__((section(".text.table"))) volatile const u32 disc_params[12] = {1};
+__attribute__((section(".text.fixed"))) const int disc_vt[9] = {1};
+void disc_start(u32 *self, void *player) {
+    u32 *ball;
+    BigBang_Start(self, player);
+    ball = (u32 *)self[1];
+    if (ball) {
+        const volatile u32 *mine = &disc_params[self[2] * 4];
+        u32 *old = (u32 *)ball[0x4C / 4];
+        int shift = (int)mine[2] - (int)old[2];
+        ball[0x4C / 4] = (u32)mine;
+        ball[0x50 / 4] += shift;
+        ball[0x18 / 4] += shift;
+    }
+}
+void disc_use(u8 *record, void *sprite) {
+    int level = record[record[0x15] * 2 + 0x2E];
+    u32 *b = Alloc(0x14);
+    if (b) { b[0] = (u32)disc_vt; b[2] = level; b[3] = 0; b[4] = 0; }
+    Sprite_SetFacing(sprite, 0x12);
+    Sprite_SetBehaviour(sprite, b);
+}

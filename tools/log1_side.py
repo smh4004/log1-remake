@@ -96,7 +96,7 @@ class Side:
             o += ['if_flag %d sc%d' % (PAID + i, i), 'unless_flag %d sc%d' % (KILLED + i, i), 'set_flag %d' % (PAID + i)]
             for t in b['paid']: o += say(None, t)
             o += ['do call 194 %d' % self.st.bal.quest_exp(b['area'], True)] + (['do call 147 %d' % b['gear']] if 'gear' in b else []) + ['label sc%d' % i]
-        o += self.more_checks()
+        o += self.more_checks() + __import__('log1_party').checks(self.st)
         o += ['if_flag %d sc_s' % STEVE_PAID, 'unless_flag %d sc_s' % STEVE_DEAD, 'set_flag %d' % STEVE_PAID]
         for t in STEVE['paid']: o += say(None, t)
         o += ['do call 194 %d' % self.st.bal.quest_exp(HELL, True), 'do call 147 %d' % STEVE['gear'], 'label sc_s', 'stop']
@@ -177,10 +177,10 @@ class Side:
             walkins.append((n, 40, 672, 112, 744, named['side_deliver']))
             x, y = spot(*STEVE['at']); death = put(__import__('scenes').assemble('call 29 %d; call 29 893' % STEVE_DEAD, {}) + b'\x11'); row = actors.row(STEVE['sprite'], death, True, None, n, True, 3)
             spawns.append((STEVE_OPEN, n, put(struct.pack('<8I', 0x0800FD55, 0, row, (y << 16) | x, actors.actor(STEVE['sprite'], True), 0x080555A0, 1, 0x080716EC)), 0, STEVE_DEAD))
-        def foe(sprite, x, y, cond, kill, extra=0, boss=True, level_area=None):
+        def foe(sprite, x, y, cond, kill, extra=0, boss=True, level_area=None, tint=None, look=None):
             nonlocal foe_i
             x, y = spot(x, y); death = put(__import__('scenes').assemble('call 29 %d; call 29 893' % kill, {}) + b'\x11'); row = actors.row(sprite, death, True, None, level_area if level_area is not None else n, boss, extra)
-            foes_out.append((n, foe_i, x, y, put(struct.pack('<8I', 0x0800FD55, put(cond_code(cond) + b'\x11'), row, (y << 16) | x, actors.actor(sprite, True), 0x080555A0, 1, 0x080716EC)))); foe_i += 1
+            foes_out.append((n, foe_i, x, y, put(struct.pack('<8I', 0x0800FD55, put(cond_code(cond) + b'\x11'), row, (y << 16) | x, actors.actor(sprite, True, tint, look), 0x080555A0, 1, 0x080716EC)))); foe_i += 1
         def npc(d, talk):
             x, y = spot(*d['at']); rec, _ = npc_rec(d['sprite'], x, y, named[talk]); spawns.append((d['after'], n, rec, 0, 0))
         if n == BUTLER['area']:
@@ -193,6 +193,7 @@ class Side:
         for i, e in enumerate(ELITES):
             if e['area'] == n: foe(e['sprite'], e['at'][0], e['at'][1], 'set:%d & clear:%d' % (AFTER_ELITES, ELITE_KILLED + i), ELITE_KILLED + i, 4, True)
         if n == ELDER['area']: npc(ELDER, 'side_elder')
+        __import__('log1_party').install(n, a, fits, r, actors, put, named, spawns, foe, BF_IDX)
         if n == ANNOUNCER['area']:
             npc(ANNOUNCER, 'side_announcer')
             for i, m in enumerate(REMATCHES): foe(m['sprite'], m['at'][0], m['at'][1], 'set:%d & clear:%d' % (RM_OPEN + i, RM_KILLED + i), RM_KILLED + i, m['extra'], True, 41)

@@ -5,7 +5,7 @@ ENTRY, CODE, DRAW = 0x3D4A0, 0xBF0000, 0x1157E
 EXTRA = []                                                             # -D flags from log1_start: addresses in the boot code and movies
 
 
-def install(rom, spawns=(), walks=(), picks=(), foes=(), zones=(), check=0, follows=(), fly=(), art=b'', marks=(), walkins=(), saved=0, poses=(), opening=0, it_rows=()):
+def install(rom, spawns=(), walks=(), picks=(), foes=(), zones=(), check=0, follows=(), fly=(), art=b'', marks=(), walkins=(), saved=0, poses=(), opening=0, it_rows=(), switch=0):
     """spawns: up to 32 (flag, area entry bus address, record bus address, NPC index to remove or 0) rows for live_spawn."""
     assert len(spawns) <= 256 and len(walks) <= 16
     d = tempfile.mkdtemp(); o, e, b = (os.path.join(d, n) for n in ('f.o', 'f.elf', 'f.bin'))
@@ -16,6 +16,7 @@ def install(rom, spawns=(), walks=(), picks=(), foes=(), zones=(), check=0, foll
     if len(rom) < CODE + 0x2000: rom += b'\xff' * (0x1000000 - len(rom))
     rom[CODE:CODE + len(code)] = code
     syms = subprocess.check_output(['arm-none-eabi-nm', e]).decode()
+    open(os.path.join(ROOT, 'out', 'flight.syms'), 'w').write(syms)              # for debugging: PCs in 0x08BF0000-
     entry = int(next(l.split()[0] for l in syms.splitlines() if l.endswith('flight_keys')), 16)
     rom[ENTRY:ENTRY + 16] = struct.pack('<HHIII', 0x4778, 0x46C0, 0xE59FC000, 0xE12FFF1C, entry | 1)
     wt = int(next(l.split()[0] for l in syms.splitlines() if l.endswith('walk_table')), 16) - 0x08000000
@@ -35,6 +36,7 @@ def install(rom, spawns=(), walks=(), picks=(), foes=(), zones=(), check=0, foll
     e_ = table('it_ptr', (e_ + 3) & ~3, b''.join(struct.pack('<3I', *row) for row in it_rows) + bytes(12)); assert e_ < 0xBF8000     # Instant Transmission's places: {flag, list, picture}
     po = int(next(l.split()[0] for l in syms.splitlines() if l.endswith('opening_ptr')), 16) - 0x08000000; struct.pack_into('<I', rom, po, opening)
     ps = int(next(l.split()[0] for l in syms.splitlines() if l.endswith('saved_ptr')), 16) - 0x08000000; struct.pack_into('<I', rom, ps, saved)
+    ps = int(next(l.split()[0] for l in syms.splitlines() if l.endswith('switch_ptr')), 16) - 0x08000000; struct.pack_into('<I', rom, ps, switch)
     pc = int(next(l.split()[0] for l in syms.splitlines() if l.endswith('check_ptr')), 16) - 0x08000000; struct.pack_into('<I', rom, pc, check)
     draw = int(next(l.split()[0] for l in syms.splitlines() if l.endswith('flight_draw')), 16)
     rom[DRAW:DRAW + 18] = struct.pack('<HHH', 0x46C0, 0x4778, 0x46C0) + struct.pack('<III', 0xE59FC000, 0xE12FFF1C, draw | 1)   # replaces the draw pass, see src/flight.c

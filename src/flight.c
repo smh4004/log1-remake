@@ -331,12 +331,28 @@ static void live_opening(void) {
 /* SELECT saves, with Buu's Fury's own save routine, to the slot this game was started from. Its menus don't offer it in this game. */
 __attribute__((section(".text.table"))) volatile const u32 saved_ptr = 0;
 #define SAVE_HELD (*(volatile u8 *)0x03005F21)
-static void live_save(u32 k) {
+/* L + SELECT: Buu's Fury's Switch Character screen, once someone has joined after the ending (record +0 bit 0 = in the party). */
+__attribute__((section(".text.table"))) volatile const u32 switch_ptr = 0;
+static int party_size(void) { int c, n = 0; for (c = 0; c < 8; c++) n += *(u8 *)(0x03001560 + 0x68 * c) & 1; return n; }
+#define SWITCH_WAIT (*(volatile u8 *)0x03005F24)    /* L + SELECT seen: open the screen once both are let go (an L press in it turns its page) */
+static u32 live_save(u32 k) {
     int held = (k & 4) != 0, pressed = held && !SAVE_HELD; SAVE_HELD = held;
-    if (!pressed || !PLAYER || !AREA || *(u8 *)AREA != WORLD_ID || (*(u8 *)(AREA + 1) >= PIC_FIRST && *(u8 *)(AREA + 1) < PIC_END) || STATE[1] || ZBUSY) return;
+    if (SWITCH_WAIT) {
+        if (k & 0x204) return k & ~0x204;
+        SWITCH_WAIT = 0;
+        if (PLAYER && !STATE[1] && !ZBUSY) ((fn0)0x080027DF)();          /* native 0x8D's own code: the Switch Character screen, then the new figure */
+        return k;
+    }
+    if (k & 0x200) k &= ~4;                    /* L + SELECT is ours: Buu's Fury would open its scouter */
+    if (!pressed || !PLAYER || !AREA || *(u8 *)AREA != WORLD_ID || (*(u8 *)(AREA + 1) >= PIC_FIRST && *(u8 *)(AREA + 1) < PIC_END) || STATE[1] || ZBUSY) return k;
+    if (!(k & 4)) {                            /* L held: switch characters, once someone has joined */
+        if (switch_ptr && party_size() > 1) SWITCH_WAIT = 1;
+        return k;
+    }
     int at[2] = {*(int *)(PLAYER + 0x1A0) >> 8, *(int *)(PLAYER + 0x1A4) >> 8};
     ((void (*)(u32, u32, int *, int))0x08004963)(0x03001068, *(volatile u32 *)0x03001910, at, 0);   /* records the area and spot, marks the slot and writes it */
     u32 zone[6] = {0, 0, 0, 0, 0, saved_ptr}; ZBUSY = 1; ((fn2)0x080073F1)(zone, PLAYER); ZBUSY = 0;
+    return k;
 }
 
 /* A Great Ape is taller than an actor's one 32x32 piece, so its actor goes invisible and this draws it as a 32x64 sprite of its own, in the low OBJ tiles that actors don't reach. */
@@ -438,7 +454,7 @@ void flight_keys(u8 *st) {
     ram_init();
     live_pictures();
     u32 k = live_it(~(u32)KEYS & 0xFFFF);
-    live_save(k);
+    k = live_save(k);
     ((fn2)0x0804023D)(st, k);
     if (!(~*(u16 *)(st + 2) & 0xF) && st[1] && (*(u16 *)(st + 4) & 0xF)) ((fn0)0x0803FA0D)();
     int fresh = AREA != LAST;

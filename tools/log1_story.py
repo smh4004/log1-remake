@@ -9,7 +9,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__))); sys.path.ins
 from convert_log1 import chain, conversations, split_line  # noqa: E402
 import log1_pickups as P  # noqa: E402
 from log1_world import takeoff_lists as world_lists  # noqa: E402
-import log1_yardrat  # noqa: E402
+import log1_yardrat, log1_party  # noqa: E402
 import log1_side  # noqa: E402
 
 QF, TF, EF, TOK, NOOP = 420, 500, 620, 870, 895
@@ -349,7 +349,7 @@ class Story:
                 if t['type'] == 'after_conversation': after[t['set']].append(t)
         for s in sorted(self.area_sets | set(tasks) | set(self.state)):
             if s not in self.sets: continue
-            L = self.sets[s]; r = ['list talk_set%02d' % s, 'set_flag %d' % NOOP] + (log1_yardrat.king_kai(self) if s == log1_yardrat.KK_SET else [])
+            L = self.sets[s]; r = ['list talk_set%02d' % s, 'set_flag %d' % NOOP] + (log1_yardrat.king_kai(self) if s == log1_yardrat.KK_SET else []) + log1_party.talk_prefix(self, s)
             for x, t in tasks[s]:
                 lab = 't%d_next' % t['id']; r.append('if_flag %d %s' % (TF + t['id'], lab))
                 if t['type'] == 'talk_with_item': r.append('unless_flag %d %s' % (TF + self.pick.get((x['quest'], t['item']), 0), lab))
@@ -448,6 +448,6 @@ class Story:
     def generate(self, path):
         self.out += ['list new_game_opening', 'set_flag %d' % NOOP, 'do call 120 1; call 29 958; call 136 4', 'do call 119 26 1 1 %d %d; call 136 2; call 121 15' % NEW_GAME_SPOT, 'stop']
         self.out += ['list game_saved', 'narrate Game saved.']
-        chk = self.check_list(); self.talk_lists(); self.place_lists(); self.pickup_lists(); self.zone_lists(); self.out = chk + self.out + world_lists(self.ids) + self.test_warps() + self.side.lists() + log1_yardrat.lists(self, self.log1dir)
+        chk = self.check_list(); self.talk_lists(); self.place_lists(); self.pickup_lists(); self.zone_lists(); self.out = chk + self.out + world_lists(self.ids) + self.test_warps() + self.side.lists() + log1_yardrat.lists(self, self.log1dir) + log1_party.lists(self)
         open(path, 'w', encoding='utf-8').write('\n'.join(self.out) + '\n')
         return dict(lines=sum(l.startswith('say') or l.startswith('narrate') for l in self.out), steps=len(self.out), doors=sum(map(len, self.doors.values())), hostile=len(self.hostile), walks=len(self.walks), flags_state=sum(map(len, self.state.values())), log=dict(self.log))

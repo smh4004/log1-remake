@@ -15,6 +15,12 @@ B = 0x08000000
 FORMS, FORM_COUNT = 0x6B82EC, 54
 SKILL_ROWS, SKILL_COUNT, SKILL_REF = 0x71DAF8, 24, 0x13618
 SS_SKILL, IT_SKILL, KAME_SKILL, KAIOKEN_SKILL, SPIRIT_SKILL, SOLAR_SKILL = 20, 14, 15, 24, 19, 25
+GALICK_SKILL, SBC_SKILL, DISC_SKILL = 26, 27, 28                        # the allies' beams (log1_party): Vegeta's Galick Gun, Piccolo's Special Beam Cannon
+NATIVES, JOIN_NATIVE, JOIN_OLD = 0x55098, 0xE8, 0x08003891   # party_join: a native no script calls (BFU's choice)
+BEAM_PARAMS, BEAM_VT = 0x71DA68, 0x4D9F8
+BALL_PARAMS, BALL_VT = 0x76ACC0, 0x4D05C                 # Big Bang's: levels 1 and 2 cyan ball, level 3 gold
+DISC_POWER = (1.25, 1.25, 1.3)
+LOG2 = os.path.join(ROOT, 'rom', 'log2.gba')
 BOOK = (7, KAME_SKILL, KAIOKEN_SKILL, SPIRIT_SKILL, SS_SKILL, SOLAR_SKILL, IT_SKILL)     # Energy Blast, Kamehameha, Kaioken, Spirit Bomb, Super Saiyan, Solar Flare, Instant Transmission
 YARDRAT_FLAG = 402                                         # Instant Transmission: the Yardrat Elder teaches it (log1_yardrat.LEARNED)
 SPIRIT_FLAG = 403                                          # the Spirit Bomb: King Kai's post-game secret (log1_yardrat.SPIRIT)
@@ -39,6 +45,12 @@ def ui_text(path):
         f.write('[ui:%d]\n= Press the B Button to raise a Spirit Bomb, then throw it the way you face. It hits everything nearby very hard. Costs half your EP.\n\n' % (KK_NAME_UI + 3))
         f.write('[ui:%d]\n= Solar Flare\n\n' % (KK_NAME_UI + 4))
         f.write('[ui:%d]\n= Press the B Button to flash a blinding light: every ordinary enemy on screen is stunned for a few seconds. Bosses are not fooled.\n\n' % (KK_NAME_UI + 5))
+        f.write('[ui:%d]\n= Galick Gun\n\n' % (KK_NAME_UI + 6))
+        f.write('[ui:%d]\n= Press the B Button and hold it to charge, then release to fire Vegeta\'s violet beam.\n\n' % (KK_NAME_UI + 7))
+        f.write('[ui:%d]\n= Special Beam Cannon\n\n' % (KK_NAME_UI + 8))
+        f.write('[ui:%d]\n= Press the B Button and hold it to charge, then release to fire a thin, piercing beam from two fingers.\n\n' % (KK_NAME_UI + 9))
+        f.write('[ui:%d]\n= Destructo Disc\n\n' % (KK_NAME_UI + 10))
+        f.write('[ui:%d]\n= Hold the B Button to form a spinning disc of energy, then let go to throw it. It cuts through almost anything.\n\n' % (KK_NAME_UI + 11))
         f.write('[ui:%d]\n= Kaioken\n\n' % KK_NAME_UI)
         f.write('[ui:%d]\n= Press the B Button for the Kaioken: attacks hit 1.25x as hard, up to 1.75x as you master it, but it wears on your health. Not with Super Saiyan. Press it again to change back.\n\n' % (KK_NAME_UI + 1))
 
@@ -130,7 +142,7 @@ def compile_code(at):
     d = tempfile.mkdtemp(); c, o, e, b, ld = (os.path.join(d, n) for n in ('s.c', 's.o', 's.elf', 's.bin', 's.ld'))
     open(ld, 'w').write('SECTIONS { . = 0x%X; .text : { *(.text*) *(.rodata*) } .data : { *(.data*) *(.bss*) *(COMMON) } /DISCARD/ : { *(.comment) *(.ARM.attributes) } }\n' % (B + at))
     defs = ['-DSS_SKILL=%d' % SS_SKILL, '-DIT_SKILL=%d' % IT_SKILL, '-DKAME_SKILL=%d' % KAME_SKILL, '-DKAIOKEN_SKILL=%d' % KAIOKEN_SKILL, '-DSPIRIT_SKILL=%d' % SPIRIT_SKILL, '-DSOLAR_SKILL=%d' % SOLAR_SKILL, '-DYARDRAT_FLAG=%d' % YARDRAT_FLAG, '-DSPIRIT_FLAG=%d' % SPIRIT_FLAG,
-            '-DMASTERY_L2=%d' % MASTERY_L2, '-DMASTERY_L3=%d' % MASTERY_L3]
+            '-DMASTERY_L2=%d' % MASTERY_L2, '-DAS_VEGETA=%d' % __import__('log1_party').AS_VEGETA, '-DMASTERY_L3=%d' % MASTERY_L3]
     subprocess.check_call(['arm-none-eabi-gcc', '-mthumb', '-mcpu=arm7tdmi', '-Os', '-ffreestanding', '-fno-builtin', '-nostdlib', '-fshort-wchar', *defs, '-c', os.path.join(ROOT, 'src', 'skills.c'), '-o', o])
     subprocess.check_call(['arm-none-eabi-gcc', '-mthumb', '-mcpu=arm7tdmi', '-nostdlib', '-T', ld, '-Wl,-e,player_input', o, '-lgcc', '-o', e])
     heads = subprocess.check_output(['arm-none-eabi-objdump', '-h', e]).decode()
@@ -139,10 +151,11 @@ def compile_code(at):
         if len(p) > 2 and p[1] == '.data': assert int(p[2], 16) == 0, 'skills.c has writable statics: they would sit in ROM'
     subprocess.check_call(['arm-none-eabi-objcopy', '-O', 'binary', '-j', '.text', e, b])
     sym = {l.split()[2]: int(l.split()[0], 16) for l in subprocess.check_output(['arm-none-eabi-nm', e]).decode().splitlines() if len(l.split()) == 3}
+    open(os.path.join(ROOT, 'out', 'skills.syms'), 'w').write(''.join('%08x %s\n' % (v, k) for k, v in sorted(sym.items(), key=lambda kv: kv[1])))     # for debugging
     return open(b, 'rb').read(), sym
 
 
-def install(r, red, named):
+def install(r, red, named, party=None):
     """red: actors()'s result. Call last: it moves the form table, which log1_start.alive() edits in place."""
     assert set(r[CODE:CODE_END]) <= {0xFF}, 'skills code space is in use'
     clean_rows = bytes(r[SKILL_ROWS:SKILL_ROWS + 24 * SKILL_COUNT]); pal, one = palette(r)
@@ -161,6 +174,10 @@ def install(r, red, named):
         struct.pack_into('<H', row, 0, 0x51); struct.pack_into('<I', row, 8, 0x03001B78)     # Super Saiyan class, with its behaviour object
         struct.pack_into('<H', row, 0x0E, red[src]); row[0x16] = 255; row[0x17] = base
         kmap.append((base, FORM_COUNT + len(kmap))); rows += row
+    party_forms = {}
+    if party:
+        import log1_party
+        more, party_forms = log1_party.form_rows(rows, len(rows) // 24, party); rows += more
     new_forms = put(bytes(rows)); n = 0
     for o in range(0, 0x80000, 4):
         if u32(r, o) == B + FORMS: struct.pack_into('<I', r, o, new_forms); n += 1
@@ -220,6 +237,10 @@ def install(r, red, named):
     struct.pack_into('<HHII', sf, 12, KK_NAME_UI + 4, KK_NAME_UI + 5, sym['solar_can'] | 1, sym['solar_use'] | 1)
     assert len(table) == 24 * SOLAR_SKILL
     table += sf
+    assert len(table) == 24 * GALICK_SKILL
+    table += beam_rows(r, pal, one, put, fill, sym, clean_rows)
+    assert len(table) == 24 * DISC_SKILL
+    table += disc_row(r, pal, one, put, fill, sym, clean_rows)
     # the effect slot's methods (0 delete, 2 update every frame)
     vt = sym['spirit_vt'] - B
     for k, name in enumerate(('spirit_destroyed', 'spirit_nop', 'spirit_update', 'spirit_nop', 'spirit_nop', 'spirit_nop')):
@@ -243,4 +264,109 @@ def install(r, red, named):
     for vt_, slot, want, name in ((0x4C9F0, 0x84, 0x0804F8C9, 'player_input'), (0x4B024, 4, 0x080171A9, 'skilltab_setup'), (0x4B024, 40, 0x080175FD, 'skilltab_keys')):
         assert B + vt_ + struct.unpack_from('<i', r, vt_ + slot)[0] == want, 'vtable changed at 0x%X' % (vt_ + slot)
         struct.pack_into('<i', r, vt_ + slot, (sym[name] | 1) - (B + vt_))
-    return {'code': len(code), 'end': hex(at), 'forms': kmap}
+    # party_join, the allies' native, and their moves
+    assert u32(r, NATIVES + 4 * JOIN_NATIVE) == JOIN_OLD, 'native 0x%X changed' % JOIN_NATIVE
+    struct.pack_into('<I', r, NATIVES + 4 * JOIN_NATIVE, sym['party_join'] | 1)
+    if party:
+        import log1_party
+        fill('party_skills', b''.join(bytes([len(m)] + list(m) + [0] * (7 - len(m))) for m in (log1_party.SKILLS.get(c, ()) for c in range(8))))
+        fill('party_lean', b''.join(bytes(log1_party.LEAN.get(c, (100, 100, 100))) for c in range(8)))
+    return {'code': len(code), 'end': hex(at), 'forms': kmap, 'party': party_forms}
+
+
+def disc_row(r, pal, one, put, fill, sym, clean_rows):
+    """Destructo Disc: Big Bang's ball animations redrawn as a flat, spinning golden disc the size each ball frame was, with Big Bang's code (BFU's
+    Eraser Cannon way). The art is drawn here, not taken from anything."""
+    gold = [one(np.array(c)) for c in ((120, 72, 0), (232, 168, 0), (248, 216, 40), (248, 248, 160), (255, 255, 255))]
+    copies = {}
+    def disc(tiles, w, h, spin):
+        o = tiles - B; px = np.frombuffer(bytes(r[o:o + w * h]), np.uint8).reshape(h // 8, w // 8, 8, 8).transpose(0, 2, 1, 3).reshape(h, w)
+        ys, xs = np.nonzero(px)
+        rad = (max(xs.max() - xs.min(), ys.max() - ys.min()) + 1) / 2 if len(xs) else w / 4
+        a, b = min(w / 2 - 0.5, rad * 1.15), max(1.5, rad * 0.4)
+        img = np.zeros((h, w), np.uint8); cy, cx = (h - 1) / 2, (w - 1) / 2
+        for y in range(h):
+            for x in range(w):
+                d = ((x - cx) / a) ** 2 + ((y - cy) / b) ** 2
+                if d > 1: continue
+                ang = (np.degrees(np.arctan2((y - cy) / b, (x - cx) / a)) + spin) % 90
+                img[y, x] = gold[0] if d > 0.82 else gold[4] if d < 0.12 else gold[3] if ang < 18 else gold[2] if d < 0.5 else gold[1]
+        return img.reshape(h // 8, 8, w // 8, 8).transpose(0, 2, 1, 3).tobytes()
+    def ball(rec):
+        out = bytearray(r[rec:rec + 480])
+        for k in range(0, 480, 12):
+            head, _, tiles = struct.unpack_from('<III', out, k)
+            if tiles:
+                w, h = head >> 16 & 255, head >> 24 & 255
+                if tiles not in copies: copies[tiles] = put(disc(tiles, w, h, 30 * len(copies)))
+                struct.pack_into('<I', out, k + 8, copies[tiles])
+        return put(bytes(out))
+    balls, params = {}, bytearray()
+    for i in range(3):
+        a, b_, rec, strength = struct.unpack_from('<4I', r, BALL_PARAMS + 16 * i)
+        balls.setdefault(rec, ball(rec - B))
+        params += struct.pack('<4I', a, b_, balls[rec], int(strength * DISC_POWER[i]))
+    fill('disc_params', bytes(params))
+    vt = sym['disc_vt'] - B
+    for k in range(9):
+        fn = (sym['disc_start'] | 1) if k == 0 else B + BALL_VT + struct.unpack_from('<i', r, BALL_VT + 4 * k)[0]
+        struct.pack_into('<i', r, vt + 4 * k, fn - (B + vt))
+    row = bytearray(clean_rows[24 * 2:24 * 3])         # Big Bang's row, golden icons
+    tint = bytes(0 if v == 0 else one(np.array((max(pal[v]), int(max(pal[v]) * 0.8), int(min(pal[v]) * 0.3)))) for v in range(256))
+    struct.pack_into('<II', row, 4, *[put(bytes(r[p - B:p - B + 0x200]).translate(tint)) for p in struct.unpack_from('<II', row, 4)])
+    struct.pack_into('<HH', row, 12, KK_NAME_UI + 10, KK_NAME_UI + 11)
+    struct.pack_into('<I', row, 20, sym['disc_use'] | 1)
+    return bytes(row)
+
+
+def beam_rows(r, pal, one, put, fill, sym, clean_rows):
+    """Galick Gun and Special Beam Cannon (BFU's add_eraser): copies of the Kamehameha's frame records, each {header, attributes, tile data} rows,
+    recoloured; the Special Beam Cannon's beam itself is LoG2's own art. Returns their two skill rows."""
+    rows = b''
+    def frames(o, count, remap, copies):
+        out = bytearray(r[o:o + 12 * count])
+        for k in range(0, 12 * count, 12):
+            tiles = u32(out, k + 8)
+            if not 0x08700000 <= tiles < 0x08800000: continue
+            if tiles not in copies:
+                t = tiles - B; copies[tiles] = put(bytes(r[t:t + out[k + 2] * out[k + 3]]).translate(remap))
+            struct.pack_into('<I', out, k + 8, copies[tiles])
+        return put(bytes(out))
+    def remap_of(tint): return bytes(0 if v == 0 else one(np.array(tint.get(v, tuple(pal[v])), dtype=int)) for v in range(256))
+    # Galick Gun: the Kamehameha in violet. Special Beam Cannon: BFU's tint (pale yellow core, gold, purple rim).
+    GALICK = {2: (248, 232, 255), 30: (248, 232, 255), 29: (232, 184, 255), 76: (208, 136, 255), 28: (208, 136, 255), 5: (208, 136, 255), 195: (176, 80, 248), 27: (176, 80, 248), 110: (176, 80, 248),
+              75: (120, 32, 200), 109: (120, 32, 200), 74: (80, 16, 152), 4: (80, 16, 152)}
+    SBC = {2: (248, 248, 216), 30: (248, 248, 216), 29: (248, 248, 144), 76: (248, 248, 72), 28: (248, 248, 72), 5: (248, 248, 72), 195: (248, 208, 0), 27: (248, 208, 0), 110: (248, 208, 0),
+           75: (168, 48, 224), 109: (168, 48, 224), 74: (112, 24, 168), 4: (112, 24, 168)}
+    for name, tint, ui in (('galick', GALICK, KK_NAME_UI + 6), ('sbc', SBC, KK_NAME_UI + 8)):
+        remap = remap_of(tint); copies = {}
+        head = frames(u32(r, BEAM_PARAMS + 12) - B, 64, remap, copies)
+        if name == 'sbc':        # LoG2's beam: 7 rows a facing (muzzle 2, body 3, tip 2) laid into BF's 16-row facings (muzzle 0-1, body 3-5 and spare 6, tip 7-8 and 10-11)
+            l2 = open(LOG2, 'rb').read(); L2_ART = 0x6E4560
+            l2pal = np.frombuffer(l2[0x3ECEA4:0x3ECEA4 + 768], np.uint8).reshape(256, 3).astype(int)
+            l2map = bytes(0 if v == 0 else one(l2pal[v]) for v in range(256)); l2tiles = {}
+            record = bytearray(r[head - B:head - B + 768])
+            for facing in range(4):
+                for bf, row in ((0, 0), (1, 1), (3, 2), (4, 3), (5, 4), (7, 5), (8, 6), (10, 5), (11, 6)):
+                    hdr, attr, tiles = struct.unpack_from('<III', l2, L2_ART + 12 * (facing * 7 + row))
+                    if tiles not in l2tiles:
+                        t = tiles - B; l2tiles[tiles] = put(l2[t:t + 256].translate(l2map))
+                    struct.pack_into('<III', record, 12 * (facing * 16 + bf), hdr, attr, l2tiles[tiles])
+                struct.pack_into('<I', record, 12 * (facing * 16 + 6) + 8, u32(record, 12 * (facing * 16 + 5) + 8))
+            head = put(bytes(record))
+        shape, params = {}, bytearray()
+        for i in range(3):
+            a, strength, body, _ = struct.unpack_from('<4I', r, BEAM_PARAMS + 16 * i)
+            shape.setdefault(body, frames(body - B, 9, remap, copies))
+            params += struct.pack('<4I', a, strength, shape[body], head)
+        fill(name + '_params', bytes(params))
+        vt = sym[name + '_vt'] - B
+        for k in range(9):
+            fn = (sym[name + '_start'] | 1) if k == 0 else B + BEAM_VT + struct.unpack_from('<i', r, BEAM_VT + 4 * k)[0]
+            struct.pack_into('<i', r, vt + 4 * k, fn - (B + vt))
+        row = bytearray(clean_rows[24 * KAME_SKILL:24 * KAME_SKILL + 24])
+        struct.pack_into('<II', row, 4, *[put(bytes(r[p - B:p - B + 0x200]).translate(remap)) for p in struct.unpack_from('<II', row, 4)])
+        struct.pack_into('<HH', row, 12, ui, ui + 1)
+        struct.pack_into('<I', row, 20, sym[name + '_use'] | 1)
+        rows += bytes(row)
+    return rows
