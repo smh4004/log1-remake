@@ -96,6 +96,7 @@ typedef struct { const pick_t *row; void *obj; } fslot_t;
 typedef int (*cond_fn)(u32);
 #define COND_FN 0x08004785
 
+#define LEAVE_FLAGS 1000
 static int listed(void *o) { for (u32 i = 0; i < OBJ_N; i++) if (OBJ_AT[i] == o) return 1; return 0; }
 
 static void live_foes(int new_area) {
@@ -107,6 +108,10 @@ static void live_foes(int new_area) {
         const pick_t *p = S[i].row;
         if (!p) continue;
         if (!listed(S[i].obj)) { DEAD[p->flag >> 3] |= 1 << (p->flag & 7); S[i].row = 0; continue; }
+        /* a living animal whose "flag clear" condition stops holding walks off: flags from LEAVE_FLAGS up are the movie bosses' (tools/log1_movies.py),
+         * set while one is in his arena. Read straight from the flags: running the script VM here would trample a scene that is running. */
+        u32 c = ((u32 *)p->rec)[1], f = c & 0xFFFF;
+        if (c >> 16 == 2 && f >= LEAVE_FLAGS && (FLAGS[f >> 3] >> (f & 7) & 1) && *(int *)((u8 *)S[i].obj + 0x28C) > 0) { ((add_fn)0x08011945)(OBJS, S[i].obj); S[i].row = 0; continue; }
         int dx = (*(int *)((u8 *)S[i].obj + 0x1A0) >> 8) - px, dy = (*(int *)((u8 *)S[i].obj + 0x1A4) >> 8) - py;
         if (dx > 240 || dx < -240 || dy > 190 || dy < -190) { ((add_fn)0x08011945)(OBJS, S[i].obj); S[i].row = 0; }
     }

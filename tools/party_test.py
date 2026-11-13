@@ -93,9 +93,10 @@ for i in range(31):
     p = struct.unpack_from('<I', b, 4 + 4 * i)[0]
     if 0x02000000 <= p < 0x02040000 and p != me and struct.unpack('<I', rd(p + 0x14, 4))[0] == 0x03001B0C: L += w32(p + 0x28C, 1)
 run(L + ['20'], 'weak')
-for k in range(6):
+for k in range(16):                                    # the holograms dash about and drop out of the list for a moment, so keep looking
+    if all(flag(P.GRAV_KILLED + i) for i in range(3)): break
     left = [q for q in npcs() if q != (120, 112)]
-    if not left: break
+    if not left: run(['20'], 'hit%d' % k); continue
     x, y = near(pos(), left); run(place(x, y + 20, 1) + ['2 A', '15', '2 A', '15', '2 A', '60'], 'hit%d' % k)
 run(['2 A', '40'] * 30 + ['200'], 'graved')          # his lines, the level-ups, the new move
 check('beating them makes Vegeta a Super Saiyan', flag(P.GRAV_DONE) == 1 and 20 in rec(P.VEGETA)['skills'], rec(P.VEGETA))

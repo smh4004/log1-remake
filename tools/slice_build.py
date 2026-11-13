@@ -51,6 +51,7 @@ def main():
     log1_start.identity(r)
     log1_start.alive(r)
     log1_party.PORTRAITS = dict(ptr); print('skills', build_skills.install(r, red, scenes.NAMED, figs))
+    print('level-up attack checks off', __import__('levelup').apply(r))      # Gero's fix: BF's level-up checks BF moves a character may not have (an assertion crash, seen when Goku jumped to level 100)
     open(os.path.join(O, os.environ.get('OUT', 'slice') + '.gba'), 'wb').write(r); print('rom', len(r))
 
 

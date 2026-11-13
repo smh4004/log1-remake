@@ -11,7 +11,7 @@ import map_convert as C  # noqa: E402
 BB, WORLD = 0x08000000, 26
 AREAS, COUNT, TABLE_LIT, COUNT_INSN = 0x8E2E0, 452, 0x8A58, 0x125E0     # same values as Gero's tools/areas.py
 # first-listed scouter ID is used until forms are confirmed
-import log1_split, log1_world, log1_yardrat  # noqa: E402
+import log1_movies, log1_split, log1_world, log1_yardrat  # noqa: E402
 BF_IDX = dict(roshi=186, bulma=41, krillin1=166, krillin2=166, goku=115, chichi=66, piccolo=222, yamcha=302, tien=264, chaitzu=65, kingkai=161, kingyema=163, popo=193, korrin=165, puar=233, dende=77, bubbles=40, gregory=135)
 
 
@@ -91,7 +91,7 @@ def build(r, log1, ids, story, named, actors):
             if s['kind'] == 2 and (n, sid) in {(k[0], v[1]) for k, v in story.forms.items()}: continue   # this form arrives when the one before it falls (Vegeta)
             if s['kind'] == 2:
                 d_ = story.death_script(n, sid, put); row = actors.row(s['sprite'], d_ or 0, story.boss_gives_exp(n, sid), None, n, False); ch = actors.actor(s['sprite'], True)   # story enemies like the robbers fight as normal enemies
-                beat_ = story.beaten_flag(n, sid); foes_out.append((n, foe_i, s['x'], s['y'], put(struct.pack('<8I', 0x0800FD55, (0x20000 | beat_) if beat_ else 0 if s['show'] == 0 else cond, row, (s['y'] << 16) | s['x'], ch, 0x080555A0, 1, 0x080716EC)))); foe_i += 1; assert foe_i <= 64; continue
+                beat_ = story.beaten_flag(n, sid); foes_out.append((n, foe_i, s['x'], s['y'], put(struct.pack('<8I', 0x0800FD55, (0x20000 | beat_) if beat_ else (log1_movies.wild(n, s['x'], s['y']) or 0) if s['show'] == 0 else cond, row, (s['y'] << 16) | s['x'], ch, 0x080555A0, 1, 0x080716EC)))); foe_i += 1; assert foe_i <= 64; continue
             idx = BF_IDX.get(s['sprite']) or actors.actor(s['sprite'], False)
             talk = named.get('talk_set%02d' % s['param'], 0); offs.append(len(recs))
             recs += struct.pack('<9I', 0x0800A223, 0x32, 0x08017DA3, cond, (s['y'] << 16) | s['x'], talk, idx, 1, 0)

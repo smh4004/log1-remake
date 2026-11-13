@@ -52,11 +52,13 @@ def cell(d, rec, row, col, cmap, fit=False):
     return out
 
 
-def anim(ins, d, rec, rows, cmap, want=0, fit=False):
-    rows = [r for r in rows if all(cell(d, rec, r, c, cmap, fit) is not None for c in (0, 1, 2))]
+def anim(ins, d, rec, rows, cmap, want=0, fit=False, cellf=None):
+    """cellf(row, col, fit): a made frame (log1_turles) in place of the record's own."""
+    get = cellf or (lambda r, c, f: cell(d, rec, r, c, cmap, f))
+    rows = [r for r in rows if all(get(r, c, fit) is not None for c in (0, 1, 2))]
     if not rows: return 0
     if want and len(rows) < want: rows = [rows[i * len(rows) // want] for i in range(want)]
-    return ins.anim([[cell(d, rec, r, c, cmap, fit) for r in rows] for c in (0, 1, 2)])
+    return ins.anim([[get(r, c, fit) for r in rows] for c in (0, 1, 2)])
 
 
 def check_all(log1, bf):

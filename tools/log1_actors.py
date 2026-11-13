@@ -8,6 +8,8 @@ import numpy as np
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path[:0] = [os.path.join(ROOT, 'tools'), os.path.join(ROOT, 'vendor', 'gero-tools', 'tools')]
 import log1_sprites as S, sprites  # noqa: E402
+import log1_turles  # noqa: E402
+MADE = {'turles': log1_turles.cellf}                                   # look -> its frames' maker
 BIG = ('oozaru1', 'oozaru2')                                            # taller than an actor's frame; src/flight.c draws them
 ROWS, ST_REFS = 256, (0xFCE4, 0xFD70, 0x1BA90, 0x24F28, 0x279DC, 0x2CD18, 0x2F5E4, 0x32D3C, 0x335B8, 0x39BD4, 0x39D90, 0x3A384, 0x3A698)
 BB = 0x08000000; ST = 0x711274; T_NPC, T_ENEMY = 152, 25; COUNT = 298
@@ -30,12 +32,13 @@ class Actors:
         key = (sprite, enemy) + ((look,) if look else ())
         if key in self.ids: return self.ids[key]
         rec = S.record(self.log1, self.log1[S.SETS + self.names.index(sprite)]); cmap = S.colour_map(self.log1, rec, self.r, tint)
+        cf = MADE[look](self.log1, self.names, self.r) if look in MADE else None          # a figure made from two LoG1 characters
         tp = self.table[T_ENEMY if enemy else T_NPC] - BB; n = struct.unpack_from('<I', self.r, tp)[0] & 0xFF; R = bytearray(self.r[tp:tp + 0x54 + 4 * n]); struct.pack_into('<I', R, 0x50, 0); ok = 0
         plan = {0: [17, 0], 1: [0, 1], 7: [5]}
         for i in range(n):
             a = struct.unpack_from('<I', R, 0x54 + 4 * i)[0]
             if a >> 24 != 8: continue
-            want = struct.unpack_from('<I', self.r, a - BB)[0]; A = S.anim(self.ins, self.log1, rec, plan.get(i, [3, 4]), cmap, want=want) or S.anim(self.ins, self.log1, rec, [0, 1, 2, 3, 4, 5, 17], cmap, want=want) or S.anim(self.ins, self.log1, rec, plan.get(i, [3, 4]), cmap, want=want, fit=True) or S.anim(self.ins, self.log1, rec, [0, 1, 2, 3, 4, 5, 17], cmap, want=want, fit=True)
+            want = struct.unpack_from('<I', self.r, a - BB)[0]; A = S.anim(self.ins, self.log1, rec, plan.get(i, [3, 4]), cmap, want=want, cellf=cf) or S.anim(self.ins, self.log1, rec, [0, 1, 2, 3, 4, 5, 17], cmap, want=want, cellf=cf) or S.anim(self.ins, self.log1, rec, plan.get(i, [3, 4]), cmap, want=want, fit=True, cellf=cf) or S.anim(self.ins, self.log1, rec, [0, 1, 2, 3, 4, 5, 17], cmap, want=want, fit=True, cellf=cf)
             if A: struct.pack_into('<I', R, 0x54 + 4 * i, A); ok += 1
         if not ok: self.missing.append(sprite)
         self.ids[key] = len(self.table) + 9; self.table.append(self.ins.put(bytes(R)))

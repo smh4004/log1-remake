@@ -227,7 +227,7 @@ class Story:
                     if later['fn'] == '0800CB25' and lb[0] == who: x, y = struct.unpack_from('<HH', lb, 4); break
                 if nm == 'goku' or self.movable(area, who): continue    # already on the map: walking it to where a copy stands would never finish
                 if nm and area in self.areas and x and y:
-                    appeared.add(who); where[who] = (x, y); flag = SPAWN_FLAG + 2 * len(self.scene_spawns); self.scene_spawns.append((area, flag, nm, x, y, flag + 1)); light(); r.append('do call 29 %d; call 136 10' % flag); self._scene_end = getattr(self, '_scene_end', []) + [flag + 1]; continue
+                    appeared.add(who); where[who] = (x, y); flag = SPAWN_FLAG + 2 * len(self.scene_spawns); assert flag + 1 < 958, 'scene spawn flags reach src/flight.c\'s'; self.scene_spawns.append((area, flag, nm, x, y, flag + 1)); light(); r.append('do call 29 %d; call 136 10' % flag); self._scene_end = getattr(self, '_scene_end', []) + [flag + 1]; continue
             if f == '0800DF15':                                  # the closing text
                 a_ = struct.unpack_from('<I', b)[0] & 0x1FFFFFF; r += ['narrate ' + p for p in split_line(self.rom[a_:self.rom.index(b'\0', a_)].decode('latin1').replace('{', '(').replace('}', ')').strip())]; continue
             if f == '0800CB25' or f == '0800D9C5':
@@ -260,7 +260,7 @@ class Story:
         """The flag that makes src/flight.c hold this pose on an actor, or let go when src is None."""
         k = (actor, src, row)
         if k not in self.pose_flags:
-            self.pose_flags[k] = POSE_FLAG + len(self.pose_flags); assert self.pose_flags[k] < 1024; self.pose_rows.append((self.pose_flags[k], actor, src, row))
+            self.pose_flags[k] = POSE_FLAG + len(self.pose_flags); assert self.pose_flags[k] < 1000, 'pose flags reach the movie bosses\' (log1_movies)'; self.pose_rows.append((self.pose_flags[k], actor, src, row))
         return self.pose_flags[k]
 
     def home_area(self, i):
@@ -448,6 +448,6 @@ class Story:
     def generate(self, path):
         self.out += ['list new_game_opening', 'set_flag %d' % NOOP, 'do call 120 1; call 29 958; call 136 4', 'do call 119 26 1 1 %d %d; call 136 2; call 121 15' % NEW_GAME_SPOT, 'stop']
         self.out += ['list game_saved', 'narrate Game saved.']
-        chk = self.check_list(); self.talk_lists(); self.place_lists(); self.pickup_lists(); self.zone_lists(); self.out = chk + self.out + world_lists(self.ids) + self.test_warps() + self.side.lists() + log1_yardrat.lists(self, self.log1dir) + log1_party.lists(self) + log1_dragonballs.lists(self)
+        chk = self.check_list(); self.talk_lists(); self.place_lists(); self.pickup_lists(); self.zone_lists(); self.out = chk + self.out + world_lists(self.ids) + self.test_warps() + self.side.lists() + log1_yardrat.lists(self, self.log1dir) + log1_party.lists(self) + log1_dragonballs.lists(self) + __import__('log1_movies').lists(self)
         open(path, 'w', encoding='utf-8').write('\n'.join(self.out) + '\n')
         return dict(lines=sum(l.startswith('say') or l.startswith('narrate') for l in self.out), steps=len(self.out), doors=sum(map(len, self.doors.values())), hostile=len(self.hostile), walks=len(self.walks), flags_state=sum(map(len, self.state.values())), log=dict(self.log))
