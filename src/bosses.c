@@ -300,7 +300,7 @@ void bosses_tick(void) {
         if (e && *(int *)(e + 0x28C) > 0 && (m = boss_moveset(e)) >= 0) { o = e; break; }
     }
     if (!o) { BS.obj = 0; let_go(); return; }
-    if (o != BS.obj) {
+    if (o != BS.obj || m != BS.mset) {                /* a new villain (the next phase can take the last one's memory: tell them by moveset) */
         let_go(); BS.obj = o; BS.t = 0; BS.cool = 90; BS.atk = 0xFF; BS.n = 0; BS.mset = m; B2.stun = 0; B2.big = 0;
         for (i = 0; i < 12 && boss_table[i].record; i++) if (boss_table[i].record == *(u32 *)(o + 0x58)) B2.big = boss_table[i].big;
         B2.tall = B2.big != 0; B2.lastx = px_(o); B2.lasty = py_(o);
