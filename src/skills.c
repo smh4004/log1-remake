@@ -402,6 +402,7 @@ static void dragon_balls(void) {
     if (FLAG(DB_MASTERY)) { CLRF(DB_MASTERY); MASTERY[0] = MASTERY[1] = MASTERY_L3; }  /* Kaioken and Super Saiyan at Level 3 */
 }
 
+void bosses_tick(void);
 u16 *player_input(void) {
     u16 *keys = ((u16 *(*)(void))0x0804F8C9)();
     u8 *rec = rec_of(CUR);
@@ -412,6 +413,7 @@ u16 *player_input(void) {
     dragon_balls();
     rec_of(0)[0] |= 1;      /* Goku is in the party: the pause menu lists party members (record +0 bit 0) and, with none, reads a stale entry and crashes */
     if (CUR == 0 && (FRAMES & 63) == 0) skills_sync();
+    bosses_tick();                                     /* the movie villains' attacks (src/bosses.c) */
     if (!(keys[1] & 0x200) || FLYING || (AREA && *(u16 *)AREA == (0 | 50 << 8))) return keys;
     d = keys[2] & 0xF0;
     if (d) {

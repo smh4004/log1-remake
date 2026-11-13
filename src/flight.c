@@ -303,10 +303,11 @@ void flight_draw(int list) {
 #define FLASH_LEFT (*(volatile u8 *)0x03005F20)
 #define BLD_KEEP (*(volatile u16 *)0x03005F22)
 #define DARK_FLAG 796                       /* the Dragon Ball summon: the world dims while Shenron is out (tools/log1_dragonballs.py) */
+#define SKY_DARK_FLAG 950                   /* Lord Slug's cloud over the Earth, until he falls (tools/log1_movies.py) */
 #define DARK_ON (*(volatile u8 *)0x03005F25)
 #define DARK_KEEP (*(volatile u16 *)0x03005F26)
 static void live_dark(void) {
-    if (FLAGS[DARK_FLAG >> 3] >> (DARK_FLAG & 7) & 1) {
+    if ((FLAGS[DARK_FLAG >> 3] >> (DARK_FLAG & 7) & 1) || (FLAGS[SKY_DARK_FLAG >> 3] >> (SKY_DARK_FLAG & 7) & 1)) {
         if (!DARK_ON) { DARK_ON = 1; DARK_KEEP = BLDCNT_; }
         BLDCNT_ = 0xC0 | 0x3E; BLDY_ = 9;                 /* darken BG1-3, sprites and the backdrop; BG0 (the text box) stays bright */
     } else if (DARK_ON) { DARK_ON = 0; BLDCNT_ = DARK_KEEP; BLDY_ = 0; }
@@ -377,6 +378,7 @@ static u32 live_save(u32 k) {
 #define CAM_X (*(volatile int *)0x030019A4)
 #define CAM_Y (*(volatile int *)0x030019A8)
 static void big_draw(void) {
+    if (BIG_OBJ && !listed((void *)BIG_OBJ)) BIG_OBJ = 0;          /* gone (a movie villain's Great Ape or giant form beaten: src/bosses.c) */
     if (!BIG_OBJ) { if (BIG_SHOWN) { BIG_SHOWN = 0; OAM[127 * 4] = 0x200; } return; }
     u32 o = BIG_OBJ, src = BIG_DATA + (*(u8 *)(o + 0x10) & 3) * 2048;
     if (BIG_SHOWN != src) { for (int i = 0; i < 512; i++) ((volatile u32 *)0x06010000)[i] = ((const u32 *)src)[i]; BIG_SHOWN = src; }

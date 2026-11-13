@@ -119,3 +119,33 @@ def cellf(d, names, bf):
             if 0 <= y + dy < sv[0] and 0 <= x + dx < 32: out[y + dy, x + dx] = bfc(c)
         return out
     return cell
+
+
+AURA = [(236, 200, 255), (176, 104, 240), (112, 48, 184)]
+
+
+def cellf_fruit(d, names, bf):
+    """Turles after the Tree of Might's fruit: the same figure in a violet aura (a two-pixel glow round him, brightest against his body),
+    his plates and skin a shade richer."""
+    base = cellf(d, names, bf); bfc = to_bf(bf)
+    near, mid, far = (bfc(c) for c in AURA)
+
+    def cell(row, col, fit=False):
+        f = base(row, col, fit)
+        if f is None: return None
+        out = f.copy(); body = f > 0
+        ring1 = np.zeros_like(body); ring2 = np.zeros_like(body)
+        for dy, dx in ((-1, 0), (1, 0), (0, -1), (0, 1)):
+            ring1 |= np.roll(np.roll(body, dy, 0), dx, 1)
+        ring1 &= ~body
+        for dy in (-2, -1, 0, 1, 2):
+            for dx in (-2, -1, 0, 1, 2):
+                if abs(dy) + abs(dx) <= 2: ring2 |= np.roll(np.roll(body, dy, 0), dx, 1)
+        ring2 &= ~body & ~ring1
+        out[ring1] = near
+        yy = np.arange(32)[:, None]
+        out[ring2 & (yy < 16)] = mid                                         # the glow streams up off him, fading
+        out[ring2 & (yy >= 16) & ((yy + np.arange(32)[None]) % 2 == 0)] = far
+        out[0, :] = np.where(body[0], out[0], 0); out[:, 0] = np.where(body[:, 0], out[:, 0], 0); out[:, 31] = np.where(body[:, 31], out[:, 31], 0)
+        return out
+    return cell

@@ -1,6 +1,8 @@
-"""Checks the movie bosses (tools/log1_movies.py) on a built ROM, film by film (Cooler, Turles, Lord Slug): none before the ending or before
-the film ahead of it is won, the villain's arrival in his arena, his three soldiers, the area's animals keeping away, the villain once they
-fall, his reward once, and the arena quiet (and its animals back) afterwards.
+"""Checks the movie bosses (tools/log1_movies.py) on a built ROM, film by film (Cooler, Turles, Lord Slug): none before the ending, before
+the film ahead of it is won or before its lead-in; the lead-in; the villain's arrival in his arena, his three soldiers, the area's animals
+keeping away; each phase after the one before falls (Cooler's final form and Gohan's Senzu, Gohan as a Great Ape drawn big, Turles after the
+fruit, giant Slug drawn big, Gohan's whistle stunning him, the dark sky while Slug is here); the reward once, and the arena quiet (and its
+animals back) afterwards.
 
     python3 tools/movies_test.py <rom> <dir>
 
@@ -84,13 +86,24 @@ def spot(n, x, y):
         for ox in range(-d, d + 1, 4):
             for oy in range(-d, d + 1, 4):
                 if max(abs(ox), abs(oy)) == d and fits(a, x + ox, y + oy): return x + ox, y + oy
+SPOTS = {}
 for f in M.FILMS:
-    for q in f['crew'] + [f['boss']]: q['at'] = spot(f['area'], *q['at'])
-OURS = {tuple(q['at']) for f in M.FILMS for q in f['crew'] + [f['boss']]}
+    for ph in f['phases']: SPOTS[id(ph)] = [spot(f['area'], *at) for at in M.spots(f, ph)]
+OURS = {tuple(at) for v in SPOTS.values() for at in v}
 def near(f): return [q for q in f if q[3] in OURS]                  # the films' villains and soldiers, not the areas' own animals
 def wildlife(): return [q for q in foes() if q[3] not in OURS]
-def beat(tag, rounds=10, only=None):
-    """Each live enemy of ours down to 1 HP, then punched from below until none is left."""
+def beat(tag, rounds=10, only=None, until=None):
+    """Each live enemy of ours down to 1 HP, then punched from below until none is left. With until (a kill flag), one punch at a time until that
+    flag is set: the next phase stands where this one fell, and a strong Goku would beat it with the same punches."""
+    if until is not None:
+        until = until if isinstance(until, list) else [until]
+        for k in range(60):
+            if all(flag(u) for u in until): return True
+            f = [q for q in near(foes()) if only is None or q[3] in only]
+            if not f: run(['20'], tag); continue
+            p, x, y, _ = f[0]; mx = struct.unpack('<H', rd(REC + 0x18, 2))[0]
+            run(w32(0x03001574, mx << 16) + w32(p + 0x28C, 1) + place(x, y + 20, 1) + ['2 A', '40'], tag)
+        return all(flag(u) for u in until)
     for k in range(rounds):
         f = [q for q in near(foes()) if only is None or q[3] in only]
         if not f: return True
@@ -101,7 +114,7 @@ def beat(tag, rounds=10, only=None):
 def go(area, tag): run(['2 B', '30'] * 4 + w32(0x0300617C, LISTS[str(area)]) + ['300'] + ['2 A', '30'] * 10 + ['2 B', '30'] * 4 + ['100'], tag)
 def approach(f):
     """A short clear walk into the arena from just outside one of its edges, nearest the middle of that edge: (x, y, facing, key)."""
-    (cx, cy), (x0, y0, x1, y1), a = f['centre'], f['arena'], area_map(f['area'])
+    (cx, cy), (x0, y0, x1, y1), a = f['centre'], M.arena(f), area_map(f['area'])
     best = []
     for t in range(-90, 91, 4):
         for sx, sy, d, key, ix, iy in ((cx + t, y1 + 12, 1, 'UP', 0, -1), (cx + t, y0 - 20, 0, 'DOWN', 0, 1), (x0 - 24, cy + t, 3, 'RIGHT', 1, 0), (x1 + 12, cy + t, 2, 'LEFT', -1, 0)):
@@ -112,36 +125,76 @@ def enter(f, tag):
     """Into the film's area, then walks into its arena from just outside it."""
     x, y, d, key = approach(f)
     go(f['area'], tag); run(place(x, y, d) + ['10', '40 ' + key, '30'] + ['2 A', '30'] * 26 + ['200'], tag)
+def lead(f, tag):
+    """Into the lead-in's area and a few steps about, then through its lines."""
+    go(f['lead_area'], tag); moves(); run(['20 LEFT', '20 RIGHT', '30'] + ['2 A', '30'] * 16 + ['200'], tag)
 def stats(): return list(rd(REC + 0x28, 3))
+def text_done(tag, tries=40):
+    """Through any open text: A only while Goku can't take a step (a strong Goku's stray punches would beat the next phase)."""
+    for i in range(tries):
+        a = pos(); run(['6 DOWN', '4'], tag)
+        if pos() != a: run(['6 UP', '4'], tag); return True
+        run(['6 LEFT', '4'], tag)
+        if pos() != a: run(['6 RIGHT', '4'], tag); return True
+        run(['2 A', '30'], tag)
+    return False
+def senzu(): return rd(0x0300106A + 11, 1)[0]                      # Buu's Fury's item counts (tools/dragonball_test.py's ITEMS)
+BIG_OBJ = 0x03005F60
+def big(): return struct.unpack('<I', rd(BIG_OBJ, 4))[0]
+def sparks():
+    """Live boss projectiles (src/bosses.c's proj_vt) in the actor list."""
+    b = rd(0x03001C4C, 0x200); n = struct.unpack_from('<I', b, 4)[0]; ew = rd(0x02000000, 0x40000)
+    ps = [struct.unpack_from('<I', b, 8 + 4 * i)[0] for i in range(min(n, 120))]
+    return sum(1 for p in ps if 0x02000000 <= p < 0x0203FFFC and struct.unpack_from('<I', ew, p - 0x02000000)[0] == SYM['proj_vt'])
+SYM = {l.split()[-1]: int(l.split()[0], 16) for l in open(os.path.join(ROOT, 'out', 'skills.syms')) if len(l.split()) >= 2}
 
 
 run(open(os.path.join(ROOT, 'tools', 'routes', 'bf_boot_to_field.txt')).read().split('\n') + ['140'], 'new')
 F0 = M.FILMS[0]
 enter(F0, 'early'); check('no Cooler before the ending', not flag(F0['met']) and not near(foes()), near(foes()))
 cur[0] = 'new'; run(setf(M.POSTGAME) + ['w8 %08x e7' % (REC + 0x18), 'w8 %08x 03' % (REC + 0x19)] + w32(0x03001574, 999 << 16) + ['w8 %08x c8' % (REC + 0x28 + i) for i in range(3)], 'post')   # a post-game Goku: 999 HP, strong
-go(F0['area'], 'forest'); check('not on arrival in the Forest: only in the meadow', not flag(F0['met']))
+enter(F0, 'nolead'); check('no Cooler before Chi-Chi tells Goku where Gohan went', not flag(F0['met']) and not near(foes()), near(foes()))
 for k, f in enumerate(M.FILMS):
-    name = f['boss']['name']; crew = {tuple(q['at']) for q in f['crew']}; boss = {tuple(f['boss']['at'])}
+    villain = f['phases'][-1]['foes'][0]['name']
     if k:
-        cur[0] = 'post'; enter(f, 'gate%d' % k)
-        check('%s waits until %s is beaten' % (name, M.BY_KEY[f['gate']]['boss']['name']), not flag(f['met']) and not near(foes()), near(foes()))
+        cur[0] = 'post'; lead(f, 'gl%d' % k)
+        check('%s\'s lead-in waits until %s is beaten' % (villain, M.FILMS[k - 1]['phases'][-1]['foes'][0]['name']), not flag(f['lead']), flag(f['lead']))
         cur[0] = 'won%d' % (k - 1)
     else: cur[0] = 'post'
-    s0 = stats(); enter(f, 'land%d' % k)
-    check('%s arrives as Goku walks into his arena' % name, flag(f['met']) == 1)
+    lead(f, 'lead%d' % k); check('%s\'s lead-in plays in area %d' % (villain, f['lead_area']), flag(f['lead']) == 1)
+    s0 = stats(); sz0 = senzu(); enter(f, 'land%d' % k)
+    check('%s arrives as Goku walks into his arena' % villain, flag(f['met']) == 1)
+    if f.get('arrive_effects'): check('the sky over the Earth goes dark', flag(M.SKY_DARK) == 1)
     run(place(f['centre'][0], f['centre'][1] + 50) + ['60', 'shot %s_crew' % f['key']], 'land%d' % k)
-    c = near(foes()); check('%s\'s three soldiers' % name, len(c) == 3 and {q[3] for q in c} == crew, c)
-    check('the animals keep away while %s is here' % name, not wildlife(), wildlife())
+    crew = {tuple(at) for at in SPOTS[id(f['phases'][0])]}
+    c = near(foes()); check('%s\'s three soldiers' % villain, len(c) == 3 and {q[3] for q in c} == crew, c)
+    check('the animals keep away while %s is here' % villain, not wildlife(), wildlife())
     run(['2 START', '90', '4 B', '100'], 'menu'); check('the pause menu works with them about', player() >> 24 == 2)
-    cur[0] = 'land%d' % k; ok = beat('sq%d' % k, only=crew)
-    check('%s\'s soldiers fall' % name, ok and all(flag(f['killed'] + i) for i in range(3)), [flag(f['killed'] + i) for i in range(3)])
-    run(['2 A', '30'] * 8 + place(f['centre'][0], f['centre'][1] + 50) + ['300', 'shot %s' % f['key']], 'boss%d' % k); b = near(foes())
-    check('then %s himself' % name, len(b) == 1 and b[0][3] in boss and not flag(f['boss_killed']), b)
-    ok = beat('co%d' % k); run(['2 A', '30'] * 16 + ['2 B', '30'] * 6 + ['300'] + place(*approach(f)[:3]) + ['30'], 'won%d' % k)     # off the spot the test punched from, which can be inside a tree
-    check('%s beaten: his reward, once, and Goku free to go' % name, moves() and ok and flag(f['boss_killed']) == 1 and flag(f['paid']) == 1, (ok, flag(f['boss_killed']), flag(f['paid'])))
+    cur[0] = 'land%d' % k; ok = beat('sq%d' % k, only=crew, until=f['phases'][0]['kills'])
+    check('%s\'s soldiers fall' % villain, ok and all(flag(x) for x in f['phases'][0]['kills']), [flag(x) for x in f['phases'][0]['kills']])
+    for i, ph in enumerate(f['phases'][1:], 1):
+        s = ph['foes'][0]; tag = '%s%d' % (f['key'], i)
+        text_done(tag); run(place(f['centre'][0], f['centre'][1] + 50) + ['120', 'shot ' + tag], tag); b = near(foes())
+        check('%s: %s (%s)' % (f['key'], s['name'], s['look']), flag(ph['said']) == 1 and len(b) == 1 and not flag(ph['kills'][0]), (flag(ph['said']), b))
+        if s['look'] == 'cooler2': check('Gohan brings Goku a Senzu Bean', senzu() == sz0 + 1, (sz0, senzu()))
+        if 'big' in s: check('%s is drawn big' % s['name'], b and big() == b[0][0], (hex(big()), b))
+        bx, by = (b[0][1], b[0][2]) if b else f['centre']; seen = []
+        run(place(bx, by + 50) + ['60'], tag + 'a')                           # close enough that he's on screen: his shots vanish off it
+        for r_ in range(8): run(w32(0x03001574, 999 << 16) + place(bx, by + 50) + ['2 A', '28', 'shot %s_atk%d' % (tag, r_)], tag + 'a'); seen.append(sparks())
+        check('%s attacks (his own moves) and nothing breaks' % s['name'], player() >> 24 == 2 and near(foes()) and max(seen) > 0, seen)
+        if s['look'] == 'slug2':
+            L = []
+            for r_ in range(10): L += w32(0x03001574, 999 << 16) + ['120']
+            run(L + ['shot slug_whistle'], 'whistle'); text_done('whistle')
+            check('Gohan\'s whistle after giant Slug\'s third attack', flag(M.WHISTLE_DONE) == 1, flag(M.WHISTLE_DONE))
+        ok = beat('b%s' % tag, until=ph['kills'][0]); text_done('b%s' % tag); run(['60'], 'b%s' % tag)
+        check('%s falls' % s['name'], ok and flag(ph['kills'][0]) == 1 and (not ('big' in s) or big() == 0), (ok, flag(ph['kills'][0]), hex(big())))
+    run(['60'], 'won%d' % k); text_done('won%d' % k); run(['300'] + place(*approach(f)[:3]) + ['30'], 'won%d' % k)     # off the spot the test punched from, which can be inside a tree
+    check('%s beaten: his reward, once, and Goku free to go' % villain, moves() and flag(f['paid']) == 1, flag(f['paid']))
     if f['reward'].get('fruit'): check('the fruit of the Tree of Might: +5 to each stat', all(b >= min(255, a + 5) for a, b in zip(s0, stats())), (s0, stats()))
+    if f.get('arrive_effects'): check('and the sky clears', flag(M.SKY_DARK) == 0)
     go(5 if f['area'] != 5 else 2, 'away%d' % k); go(f['area'], 'back%d' % k); run(place(*f['centre']) + ['100'], 'back%d' % k)
-    check('%s\'s arena is quiet afterwards' % name, not near(foes()) and player() >> 24 == 2, near(foes()))
+    check('%s\'s arena is quiet afterwards' % villain, not near(foes()) and player() >> 24 == 2, near(foes()))
     check('and its animals come back', len(wildlife()) > 0 or f['area'] == 23, wildlife())
 print('%d failed' % len(fails) if fails else 'all passed')
 sys.exit(1 if fails else 0)

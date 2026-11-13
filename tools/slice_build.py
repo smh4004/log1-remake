@@ -45,7 +45,7 @@ def main():
     for f_, lst, art_ in log1_dragonballs.wish_rows(log1, r, scenes.NAMED):        # Shenron's wishes, the same kind of pictures
         while len(r) % 4: r.append(0)
         wish_rows.append((f_, lst, 0x08000000 + len(r))); r += art_
-    print('hook', build_flight.install(r, spawns, walks, picks, foes, zones, qc, follows, fly, log1_world.art(), log1_world.markers(), walkins, scenes.NAMED['game_saved'], pose_rows, scenes.NAMED['new_game_opening'], it_rows, scenes.NAMED['party_switch'], wish_rows, log1_dragonballs.DB_WISH_ASK, log1_dragonballs.later(scenes.NAMED)), 'spawns', len(spawns), 'walks', len(walks), 'pickups', len(picks), 'enemies', len(foes), 'hurt zones', len(zones), 'walk-in zones', len(walkins))
+    print('hook', build_flight.install(r, spawns, walks, picks, foes, zones, qc, follows, fly, log1_world.art(), log1_world.markers(), walkins, scenes.NAMED['game_saved'], pose_rows, scenes.NAMED['new_game_opening'], it_rows, scenes.NAMED['party_switch'], wish_rows, log1_dragonballs.DB_WISH_ASK, log1_dragonballs.later(scenes.NAMED) + __import__('log1_movies').later(scenes.NAMED)), 'spawns', len(spawns), 'walks', len(walks), 'pickups', len(picks), 'enemies', len(foes), 'hurt zones', len(zones), 'walk-in zones', len(walkins))
     json.dump(dict({str(n): scenes.NAMED['dbg_%d' % n] for n in IDS}, **{'x%d' % n: scenes.NAMED['dbgx_%d' % n] for n in IDS}, **{k: v for k, v in scenes.NAMED.items() if k.startswith('dbgscene_')}), open(os.path.join(O, os.environ.get('OUT', 'slice') + '.lists.json'), 'w'))
     while len(r) % 0x10000: r.append(0xFF)
     log1_start.identity(r)

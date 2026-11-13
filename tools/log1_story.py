@@ -24,7 +24,7 @@ MUSIC_BASE = 53                                        # log1_music.BASE: LoG1's
 EV, PENDING = 720, 893   # one-shot event flags; a story enemy died, so the map-wide zone should run quest_check
 PF = 100                                               # area pickups: PF.. one flag each (Buu's Fury's own story, which used these, is gone)
 WORLD = 26
-SPEAKER = dict(goku='goku'); NAME = dict(roshi='Master Roshi', chichi='Chi-Chi', kingkai='King Kai', kingyema='King Yemma', korrin='Korin', popo='Mr. Popo', raditz='Raditz', nappa='Nappa')
+SPEAKER = dict(goku='goku'); NAME = dict(slug='Lord Slug', roshi='Master Roshi', chichi='Chi-Chi', kingkai='King Kai', kingyema='King Yemma', korrin='Korin', popo='Mr. Popo', raditz='Raditz', nappa='Nappa')
 
 
 def _with_energy():
@@ -227,7 +227,7 @@ class Story:
                     if later['fn'] == '0800CB25' and lb[0] == who: x, y = struct.unpack_from('<HH', lb, 4); break
                 if nm == 'goku' or self.movable(area, who): continue    # already on the map: walking it to where a copy stands would never finish
                 if nm and area in self.areas and x and y:
-                    appeared.add(who); where[who] = (x, y); flag = SPAWN_FLAG + 2 * len(self.scene_spawns); assert flag + 1 < 958, 'scene spawn flags reach src/flight.c\'s'; self.scene_spawns.append((area, flag, nm, x, y, flag + 1)); light(); r.append('do call 29 %d; call 136 10' % flag); self._scene_end = getattr(self, '_scene_end', []) + [flag + 1]; continue
+                    appeared.add(who); where[who] = (x, y); flag = SPAWN_FLAG + 2 * len(self.scene_spawns); assert flag + 1 < 940, 'scene spawn flags reach the movie bosses\' (log1_movies, 940-957)'; self.scene_spawns.append((area, flag, nm, x, y, flag + 1)); light(); r.append('do call 29 %d; call 136 10' % flag); self._scene_end = getattr(self, '_scene_end', []) + [flag + 1]; continue
             if f == '0800DF15':                                  # the closing text
                 a_ = struct.unpack_from('<I', b)[0] & 0x1FFFFFF; r += ['narrate ' + p for p in split_line(self.rom[a_:self.rom.index(b'\0', a_)].decode('latin1').replace('{', '(').replace('}', ')').strip())]; continue
             if f == '0800CB25' or f == '0800D9C5':

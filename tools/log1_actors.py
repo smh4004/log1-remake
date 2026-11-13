@@ -9,7 +9,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path[:0] = [os.path.join(ROOT, 'tools'), os.path.join(ROOT, 'vendor', 'gero-tools', 'tools')]
 import log1_sprites as S, sprites  # noqa: E402
 import log1_turles  # noqa: E402
-MADE = {'turles': log1_turles.cellf}                                   # look -> its frames' maker
+MADE = {'turles': log1_turles.cellf, 'turles2': log1_turles.cellf_fruit}                                   # look -> its frames' maker
 BIG = ('oozaru1', 'oozaru2')                                            # taller than an actor's frame; src/flight.c draws them
 ROWS, ST_REFS = 256, (0xFCE4, 0xFD70, 0x1BA90, 0x24F28, 0x279DC, 0x2CD18, 0x2F5E4, 0x32D3C, 0x335B8, 0x39BD4, 0x39D90, 0x3A384, 0x3A698)
 BB = 0x08000000; ST = 0x711274; T_NPC, T_ENEMY = 152, 25; COUNT = 298
@@ -61,13 +61,32 @@ class Actors:
 
     def big_frames(self, rec, row, cmap):
         """A 32x64 8bpp sprite's tiles for each of Buu's Fury's directions: down, up, side, side mirrored."""
+        return self.ins.put(big_tiles(self.big_images(rec, row, cmap)))
+
+    def big_images(self, rec, row, cmap):
+        """A 32x64 sprite's frames (index arrays) for each of Buu's Fury's directions: down, up, side, side mirrored."""
         def col(c):
             p = S.u32(self.log1, (S.u32(self.log1, rec + 0x28) & S.MASK) + 4 * (row * 4 + c)) & S.MASK; _, _, w, h = struct.unpack_from('<hhHH', self.log1, p); gfx = S.u32(self.log1, p + 12) & S.MASK
             assert (w, h) == (32, 64); raw = np.frombuffer(self.log1, np.uint8, w * h // 2, gfx); px = np.empty(w * h, np.uint8); px[0::2] = raw & 15; px[1::2] = raw >> 4; im = np.zeros((h, w), np.uint8)
             for k in range(w * h // 64): im[(k // 4) * 8:(k // 4) * 8 + 8, (k % 4) * 8:(k % 4) * 8 + 8] = px[k * 64:k * 64 + 64].reshape(8, 8)
             return cmap[im]
         d, u, s = col(0), col(1), col(2)
-        return self.ins.put(b''.join(im[y:y + 8, x:x + 8].tobytes() for im in (d, u, s, s[:, ::-1]) for y in range(0, 64, 8) for x in range(0, 32, 8)))
+        return [d, u, s, s[:, ::-1]]
+
+    def hidden(self, value):
+        """Hide an actor's own sprite (each frame's OBJ turned off, its box kept for hits): src/flight.c draws a big figure in its place.
+        Its animations and frames are copied first, as frames are shared between actors with the same art."""
+        tp = self.table[value - 9] - BB; n = struct.unpack_from('<I', self.r, tp)[0] & 0xFF
+        for i in range(n):
+            a = struct.unpack_from('<I', self.r, tp + 0x54 + 4 * i)[0]
+            if a >> 24 != 8: continue
+            k = struct.unpack_from('<I', self.r, a - BB)[0]; ptrs = list(struct.unpack_from('<%dI' % (4 * k), self.r, a - BB + 4))
+            for j, f in enumerate(ptrs):
+                c = struct.unpack_from('<I', self.r, f - BB)[0]; F = bytearray(self.r[f - BB:f - BB + 4 + 16 * c])
+                for q in range(c): F[4 + 16 * q + 9] |= 0x02                 # attr0 bit 9: not drawn
+                ptrs[j] = self.ins.put(bytes(F))
+            struct.pack_into('<I', self.r, tp + 0x54 + 4 * i, self.ins.put(struct.pack('<I', k) + struct.pack('<%dI' % len(ptrs), *ptrs)))
+
 
     def pickup(self, i):
         """An NPC actor showing LoG1 pickup i in every direction and frame."""
@@ -93,3 +112,20 @@ class Actors:
         self.r[self.at:self.at + 4 * len(self.table)] = struct.pack('<%dI' % len(self.table), *self.table)
         for lit in sprites.ACTOR_LITERALS: struct.pack_into('<I', self.r, lit, BB + self.at + 4)
         return len(self.table) - COUNT, self.ins.cur
+
+
+def big_tiles(images):
+    """32x64 index arrays -> their 8bpp tiles, one after another."""
+    return b''.join(im[y:y + 8, x:x + 8].tobytes() for im in images for y in range(0, 64, 8) for x in range(0, 32, 8))
+
+
+def upscaled(cell, scale=2):
+    """A 32x32 actor frame drawn `scale` times bigger on a 32x64 canvas, its feet on the canvas's (the bottom rows line up), centred."""
+    out = np.zeros((64, 32), np.uint8); c = 15.5
+    for y in range(64):
+        sy = 31 - int((63 - y) / scale)
+        if sy < 0: continue
+        for x in range(32):
+            sx = int(np.floor(c + (x - c) / scale + 0.5))
+            if 0 <= sx < 32: out[y, x] = cell[sy, sx]
+    return out

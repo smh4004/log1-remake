@@ -29,6 +29,7 @@ SPIRIT_FLAG = 403                                          # the Spirit Bomb: Ki
 KK_NAME_UI = 1700
 MASTERY_L2, MASTERY_L3 = 100, 250
 CODE, CODE_END = 0xFC0000, 0x1000000
+ACTOR_TABLE, SPARK_VT = 0xC00000, 0x4CF3C                     # log1_actors' table of actors (value - 9); Buu's Fury's spark vtable
 # Kaioken: Goku's forms -> the actor index (form +0xE less 9) its red copy is made from. 0 base, 2 with the halo (dead, quest 23-37). No Super Saiyan
 # Kaioken: this game never puts the two together (the owner, Nov 9).
 KAIOKEN = {0: 106, 2: 108}
@@ -147,8 +148,12 @@ def compile_code(at):
     open(ld, 'w').write('SECTIONS { . = 0x%X; .text : { *(.text*) *(.rodata*) } .data : { *(.data*) *(.bss*) *(COMMON) } /DISCARD/ : { *(.comment) *(.ARM.attributes) } }\n' % (B + at))
     defs = ['-DSS_SKILL=%d' % SS_SKILL, '-DIT_SKILL=%d' % IT_SKILL, '-DKAME_SKILL=%d' % KAME_SKILL, '-DKAIOKEN_SKILL=%d' % KAIOKEN_SKILL, '-DSPIRIT_SKILL=%d' % SPIRIT_SKILL, '-DSOLAR_SKILL=%d' % SOLAR_SKILL, '-DYARDRAT_FLAG=%d' % YARDRAT_FLAG, '-DSPIRIT_FLAG=%d' % SPIRIT_FLAG,
             '-DMASTERY_L2=%d' % MASTERY_L2, '-DAS_VEGETA=%d' % __import__('log1_party').AS_VEGETA, *['-D%s=%d' % kv for kv in __import__('log1_dragonballs').C_FLAGS.items()], '-DMASTERY_L3=%d' % MASTERY_L3]
+    o2 = os.path.join(d, 'b.o')                                              # src/bosses.c: the movie villains' attacks, linked in beside
     subprocess.check_call(['arm-none-eabi-gcc', '-mthumb', '-mcpu=arm7tdmi', '-Os', '-ffreestanding', '-fno-builtin', '-nostdlib', '-fshort-wchar', *defs, '-c', os.path.join(ROOT, 'src', 'skills.c'), '-o', o])
-    subprocess.check_call(['arm-none-eabi-gcc', '-mthumb', '-mcpu=arm7tdmi', '-nostdlib', '-T', ld, '-Wl,-e,player_input', o, '-lgcc', '-o', e])
+    import log1_movies
+    subprocess.check_call(['arm-none-eabi-gcc', '-mthumb', '-mcpu=arm7tdmi', '-Os', '-ffreestanding', '-fno-builtin', '-nostdlib', '-DWHISTLE_FLAG=%d' % log1_movies.WHISTLE,
+                           '-DWHISTLE_DONE=%d' % log1_movies.WHISTLE_DONE, '-c', os.path.join(ROOT, 'src', 'bosses.c'), '-o', o2])
+    subprocess.check_call(['arm-none-eabi-gcc', '-mthumb', '-mcpu=arm7tdmi', '-nostdlib', '-T', ld, '-Wl,-e,player_input', o, o2, '-lgcc', '-o', e])
     heads = subprocess.check_output(['arm-none-eabi-objdump', '-h', e]).decode()
     for l in heads.splitlines():
         p = l.split()
@@ -203,6 +208,17 @@ def install(r, red, named, party=None):
         for k in range(0, 12 * count, 12):
             t = u32(out, k + 8) - B; struct.pack_into('<I', out, k + 8, put(bytes(r[t:t + out[k + 2] * out[k + 3]]).translate(aura)))
         fill(name, bytes(out))
+    # the movie villains' attacks (src/bosses.c): their frames, their actors, and the projectiles' vtable (the spark's, with its own update)
+    import log1_bossfx, log1_movies
+    parts = log1_bossfx.rom_parts(r, put)
+    fill('boss_parts', b''.join(struct.pack('<IBBH', *p) for p in parts) + bytes(8 * (24 - len(parts))))
+    rows = [(u32(r, ACTOR_TABLE + 4 * (v - 9)), m, big) for look, (v, m, big) in sorted(log1_movies.BOSS_ACTORS.items())]
+    assert len(rows) < 12
+    fill('boss_table', b''.join(struct.pack('<III', *row) for row in rows) + bytes(12 * (12 - len(rows))))
+    pv = sym['proj_vt'] - B
+    for k in range(16):
+        fn = (sym['proj_update'] | 1) if k == 2 else B + SPARK_VT + struct.unpack_from('<i', r, SPARK_VT + 4 * k)[0]
+        struct.pack_into('<i', r, pv + 4 * k, fn - (B + pv))
     vt = sym['kk_vt'] - B
     for k in range(14):
         fn = (sym['kk_start'] | 1) if k == 0 else B + POWER_UP_VT + struct.unpack_from('<i', r, POWER_UP_VT + 4 * k)[0]

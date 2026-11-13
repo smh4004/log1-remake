@@ -1,4 +1,4 @@
-"""Movie bosses (post-game superbosses): Cooler in the Forest, then Turles in the Wilderness, then Lord Slug in the Battlegrounds.
+"""Movie bosses (post-game): condensed retellings of Cooler's Revenge, The Tree of Might and Lord Slug, one after another.
 
     lists(st)       their scenes
     checks(st)      lines for side_check, which runs after a side enemy dies
@@ -12,11 +12,20 @@ Turles (the owner, Nov 12: "Use Goku for Turles with reskinned Saiyan armor"): L
 Lord Slug: LoG1's Piccolo in Slug's black cloak, helmet and bodysuit with his orange scarf (SLUG_TINT). Their soldiers are LoG1's henchmen in
 their own colours.
 
-Each film runs the same way. After the ending (and once the film before it is won), walking into its arena lands the villain: he sends three
-soldiers first, and when the third falls he fights Goku himself, far above anything in the story (stage 41 plus more, rising film to film).
-While he is there the area's own animals near the arena keep away (src/flight.c sends off a living one whose "flag clear" condition on
-a movie flag, 1000 and up, stops holding).
-Beating him pays big EXP and a reward, and hints at the next film. All text here is original.
+The owner (Nov 12): "Give them a condensed but detailed version of their plots leading into each where possible and make it extend the post
+game content's scope", and their own ki attacks "modeled specifically for them, not player use" (src/bosses.c, tools/log1_bossfx.py).
+
+Each film is a lead-in somewhere else, then a chain of fights in its arena with a scene between each:
+    Cooler's Revenge: Chi-Chi's note at Goku's House -> the Forest camp: Cooler's eye beam meant for Gohan, the Armored Squadron -> Cooler (his
+        fourth form) while Gohan runs for Senzu Beans -> his final form and the Supernova -> into the sun.
+    The Tree of Might: Kami calls Goku to the Lookout -> the Wilderness: the tree's roots, the Crusher Corps -> Turles's Power Ball turns Gohan
+        into a Great Ape, whom Goku has to stop -> Turles -> the fruit makes him stronger -> a Spirit Bomb drawn from the tree.
+    Lord Slug: the City's news of a runaway planet -> the Battlegrounds: Slug young again by the Dragon Balls, the sky blacked out over all
+        Earth (src/flight.c's dimming, until he falls), his soldiers -> Slug -> his giant Namekian form; Gohan's whistle stuns him mid-fight
+        (src/bosses.c asks for it) -> the Kaioken and a Spirit Bomb into his freezing machine.
+Each villain's first form opens after the ending (and after the film before), far above anything in the story (stage 41 plus more, rising).
+While a villain is there the area's own animals near the arena keep away (src/flight.c sends off a living one whose "flag clear" condition on
+a movie flag, 1000 and up, stops holding). All text here is original.
 """
 import os, struct, sys
 import numpy as np
@@ -57,64 +66,130 @@ COOLER_TINT = {2: (150, 150, 240), 3: (64, 56, 168), 4: (28, 22, 88), 5: (226, 2
 SLUG_TINT = {2: (92, 84, 110), 14: (40, 34, 54), 15: (64, 56, 82), 6: (44, 42, 54), 7: (28, 26, 36), 8: (12, 10, 18), 9: (52, 46, 66), 10: (34, 30, 44), 11: (206, 112, 36)}
 
 
-def film(key, area, centre, flags, boss, crew, gate, level_extra, exp, reward, lines):
-    x, y = centre
-    return dict(key=key, area=area, arena=(x - 96, y - 64, x + 96, y + 64), centre=centre, gate=gate, exp=exp, reward=reward, lines=lines,
-                met=flags[0], killed=flags[1], boss_killed=flags[1] + 3, paid=flags[1] + 4, said=flags[1] + 5, here=flags[2],
-                boss=dict(boss, at=(x, y - 24), extra=level_extra[0]),
-                crew=[dict(c, at=(x + dx, y + dy), extra=level_extra[1]) for c, (dx, dy) in zip(crew, ((-40, 6), (40, 6), (0, 32)))])
+def phase(kind, foes, kills, said, intro=(), effects=()):
+    """kind 'crew' (three soldiers) or 'one'; kills: their kill flags; said: the flag set when its intro has played (its foes appear then);
+    intro: (speaker, text) lines played when the phase before falls; effects: scene lines run with the intro."""
+    return dict(kind=kind, foes=foes, kills=kills, said=said, intro=list(intro), effects=list(effects))
 
+
+def soldier(name, sprite, look, light, dark): return dict(name=name, sprite=sprite, look=look, tint=squad_tint(light, dark))
+
+
+# LoG1 Frieza's palette -> Cooler's final form: the plates of his armour in a deeper violet, his white body hardened to steel grey
+COOLER2_TINT = {2: (190, 150, 255), 3: (110, 60, 210), 4: (50, 20, 120), 5: (200, 206, 222), 6: (160, 166, 190), 7: (120, 126, 156), 8: (84, 88, 118), 9: (56, 58, 84)}
+SKY_DARK = 950                                              # src/flight.c dims the screen while it is set: Slug's cloud over the Earth
+SENZU = 11
 
 FILMS = [
-    film('cooler', 4, (500, 384), (413, 414, 1016),
-         dict(name='Cooler', sprite='frieza4', look='cooler', tint=recolour(COOLER_TINT)),
-         [dict(name='Salza', sprite='hench4', look='salza', tint=squad_tint((150, 200, 255), (60, 90, 190))),
-          dict(name='Dore', sprite='hench6', look='dore', tint=squad_tint((140, 210, 120), (40, 110, 50))),
-          dict(name='Neiz', sprite='hench2', look='neiz', tint=squad_tint((250, 230, 120), (170, 120, 30)))],
-         None, (14, 8), 3, dict(gear=33, text="Goku received the Enhanced Space Armor from the wreckage!"),
-         dict(arrive="The birds go quiet. A huge round ship drops out of the sky and lands in the meadow, flattening the flowers.",
-              talk=[('boss', "So you're the Saiyan monkey who killed my little brother. Frieza always was sloppy. I'm not."),
-                    ('goku', "Your brother?! Wait, how many of you guys are there?"),
-                    ('boss', "Enough. Armored Squadron! Salza, Dore, Neiz. Bring me his head.")],
-              attack="The Forest's animals bolt into the trees. Cooler's Armored Squadron attacks!",
-              crew_down="Useless, all of them. Fine. I'll show you the difference between Frieza and me.",
-              boss_down="Impossible... Beaten by a monkey... just like Frieza...",
-              after="Cooler's ship lifts off, smoking, and vanishes into the sky. The Forest is quiet again.",
-              hint="Far away, the ground of the Wilderness gives a low rumble...")),
-    film('turles', 16, (276, 324), (1000, 1001, 1007),
-         dict(name='Turles', sprite='vegeta1', look='turles'),
-         [dict(name='Amond', sprite='hench1', look='amond', tint=squad_tint((255, 170, 110), (150, 70, 30))),
-          dict(name='Cacao', sprite='hench3', look='cacao', tint=squad_tint((200, 200, 220), (80, 80, 110))),
-          dict(name='Daiz', sprite='hench5', look='daiz', tint=squad_tint((240, 120, 140), (130, 40, 60)))],
-         'cooler', (18, 10), 4, dict(gear=73, text="Goku found Saiyan Gloves among Turles's things!", fruit=True),
-         dict(arrive="The ground shakes. Roots as thick as houses burst up through the Wilderness's ice, and the trees around them wither and go grey.",
-              talk=[('boss', "So you're Kakarot. We look alike, don't we? To Frieza's men, all low-class Saiyans look the same."),
-                    ('goku', "Who are you? And what is that thing doing to the land?"),
-                    ('boss', "The Tree of Might. It drinks a planet dry and grows one fruit that makes its eater stronger. Crusher Corps, get rid of him.")],
-              attack="The Wilderness's animals flee the dying ground. The Turles Crusher Corps attacks!",
-              crew_down="Weaklings. Fine. One bite of the fruit and I'll finish you myself.",
-              boss_down="No... a low-class clown like you... beating me...",
-              after="Turles falls, and the Tree of Might crumbles to dust. One last fruit drops at Goku's feet.",
-              hint="A cold wind blows in from the Battlegrounds...")),
-    film('slug', 23, (380, 316), (1008, 1009, 1015),
-         dict(name='Slug', sprite='piccolo', look='slug', tint=recolour(SLUG_TINT)),
-         [dict(name='Medamatcha', sprite='hench7', look='medamatcha', tint=squad_tint((170, 230, 140), (60, 120, 40))),
-          dict(name='Angila', sprite='hench8', look='angila', tint=squad_tint((140, 220, 230), (30, 100, 120))),
-          dict(name='Wings', sprite='hench1', look='wings', tint=squad_tint((200, 160, 240), (90, 50, 140)))],
-         'turles', (22, 12), 5, dict(gear=139, text="Goku found Slug's Pure Black Cape in the wreckage!"),
-         dict(arrive="The sky darkens. A ship shaped like a giant shell lands in the Battlegrounds, and the air turns bitterly cold.",
-              talk=[('boss', "A quiet little planet. Once I've blotted out its sun, it will make me a fine ship."),
-                    ('goku', "You're a Namekian! Why would a Namekian want to hurt anybody?"),
-                    ('boss', "I'm nothing like those soft Namekians. Medamatcha, Angila, Wings: deal with him.")],
-              attack="The cold drives the animals away. Lord Slug's soldiers attack!",
-              crew_down="Must I do everything myself? Then see what a Super Namekian can do.",
-              boss_down="This... cannot be... my sky... my ship...",
-              after="Slug's ship breaks apart in the cold wind, and the sun comes out again over the Battlegrounds.",
-              hint=None)),
+    dict(key='cooler', area=4, centre=(500, 384), gate=None, met=413, here=1016, lead=1017, paid=418, exp=3,
+         lead_area=2, lead_text=[('narrator', "A note on the table at Goku's House, in Chi-Chi's handwriting: \"Gohan and Krillin went camping in the "
+                                  "Forest meadow. Back for supper. Don't you dare go fighting anything.\"")],
+         arrive=[('narrator', "The meadow is quiet: a campfire, Gohan and Krillin roasting fish. Then the birds stop singing, and a huge round "
+                  "ship drops out of the sky and lands in the flowers."),
+                 ('cooler', "So this is the Saiyan who killed my little brother. Frieza always was sloppy. I'm not."),
+                 ('narrator', "Two red beams flash from Cooler's eyes, straight at Gohan. Goku throws himself in front of them and takes the blast "
+                  "across his back."),
+                 ('goku', "Gohan... are you hurt? Good. Krillin, get him out of here!"),
+                 ('cooler', "Touching. Armored Squadron! Salza, Dore, Neiz. Bring me his head.")],
+         phases=[phase('crew', [soldier('Salza', 'hench4', 'salza', (150, 200, 255), (60, 90, 190)),
+                                soldier('Dore', 'hench6', 'dore', (140, 210, 120), (40, 110, 50)),
+                                soldier('Neiz', 'hench2', 'neiz', (250, 230, 120), (170, 120, 30))], [414, 415, 416], 413),
+                 phase('one', [dict(name='Cooler', sprite='frieza4', look='cooler', tint=recolour(COOLER_TINT), moveset=0, extra=14)], [417], 419,
+                       [('cooler', "Useless, all of them. Fine. I'll show you the difference between Frieza and me."),
+                        ('gohan1', "Dad! Hold on! I'll fly to Korin's Tower and bring back Senzu Beans!"),
+                        ('narrator', "Gohan streaks away across the Forest. Goku, still bleeding from the eye beam, squares up to Cooler alone.")]),
+                 phase('one', [dict(name='Cooler', sprite='frieza4', look='cooler2', tint=recolour(COOLER2_TINT), moveset=1, extra=17)], [1019], 1018,
+                       [('cooler', "Impressive, for a monkey. Frieza only ever had four forms. I have one more."),
+                        ('narrator', "Cooler's body swells. Plates of violet armour slide over his skull and a mask snaps shut across his mouth."),
+                        ('gohan1', "Dad! Catch!"),
+                        ('narrator', "Gohan is back, and tosses Goku a Senzu Bean. Eat it from your items when you need it.")],
+                       ['do call 128 %d' % SENZU])],
+         ending=[('cooler', "This can't be... a Saiyan, beating me..."),
+                 ('narrator', "Cooler gathers everything he has into a burning Supernova. Goku's hair flashes gold. He drives it back with "
+                  "everything he has, and the blast carries Cooler up, out of the sky and into the sun."),
+                 ('narrator', "Later, Salza tries one last shot from the trees, and a Special Beam Cannon from somewhere far off ends him. "
+                  "Piccolo never says a word about it.")],
+         reward=dict(gear=33, text="Goku took the Enhanced Space Armor from the wreck of Cooler's ship!"),
+         hint="Kami's voice sounds in Goku's head: \"Goku. Come to the Lookout. Something is wrong with the Earth.\""),
+    dict(key='turles', area=16, centre=(276, 324), gate='cooler', met=1000, here=1007, lead=944, paid=1005, exp=4,
+         lead_area=15, lead_text=[('kami', "Goku, you came. The Earth's life is draining away. In the Wilderness, every tree has gone grey in a "
+                                  "single night."),
+                                  ('kami', "Something has taken root there. Something that drinks planets. Hurry.")],
+         arrive=[('narrator', "The ground shakes. Roots as thick as houses burst up through the Wilderness's ice, and the trees around them "
+                  "wither and go grey. Far off, a vast tree is rising."),
+                 ('turles', "So you're Kakarot. We look alike, don't we? To Frieza's men, all low-class Saiyans look the same."),
+                 ('goku', "Who are you? And what is that thing doing to the land?"),
+                 ('turles', "The Tree of Might. It drinks a planet dry and grows one fruit that makes its eater stronger. Crusher Corps, "
+                  "get rid of him.")],
+         phases=[phase('crew', [soldier('Amond', 'hench1', 'amond', (255, 170, 110), (150, 70, 30)),
+                                soldier('Cacao', 'hench3', 'cacao', (200, 200, 220), (80, 80, 110)),
+                                soldier('Daiz', 'hench5', 'daiz', (240, 120, 140), (130, 40, 60))], [1001, 1002, 1003], 1000),
+                 phase('one', [dict(name='Gohan', sprite='oozaru1', look='great_ape_gohan', moveset=6, extra=12, big=dict(rows=(0, 1, 5)))], [940], 1006,
+                       [('turles', "Kakarot's brat came to help? Then let's see what a real Saiyan child can do."),
+                        ('narrator', "Turles throws a ball of light into the sky: a Power Ball, a full moon in the middle of the day. Gohan looks up."),
+                        ('narrator', "Gohan's eyes go red. He grows, and grows, into a roaring Great Ape."),
+                        ('goku', "Gohan, no! ...Sorry, son. I have to stop you, and then cut that tail.")]),
+                 phase('one', [dict(name='Turles', sprite='vegeta1', look='turles', moveset=2, extra=18)], [1004], 941,
+                       [('narrator', "Goku catches the Great Ape's tail and cuts it. Gohan shrinks back, asleep in the snow."),
+                        ('turles', "Soft. A real Saiyan would have let the brat tear you apart. Now you face me.")]),
+                 phase('one', [dict(name='Turles', sprite='vegeta1', look='turles2', moveset=3, extra=21)], [943], 942,
+                       [('turles', "Not bad, Kakarot. But I have something you don't."),
+                        ('narrator', "Turles pulls a glowing fruit from the Tree of Might and bites into it. His muscles bulge and a violet "
+                         "light pours off him.")])],
+         ending=[('turles', "No... a low-class clown like you... beating me..."),
+                 ('narrator', "Goku raises his hands and draws the energy back out of the Tree of Might itself, into a Spirit Bomb. It "
+                  "smashes through Turles and the tree, and both crumble to dust."),
+                 ('narrator', "One last fruit drops into the snow at Goku's feet.")],
+         reward=dict(gear=73, text="Goku found Saiyan Gloves among Turles's things!", fruit=True),
+         hint="On the way home, every radio Goku passes in the City is talking about the same thing: something huge in the sky."),
+    dict(key='slug', area=23, centre=(380, 316), gate='turles', met=1008, here=1015, lead=945, paid=1013, exp=5,
+         lead_area=17, lead_text=[('narrator', "A radio in a shop window: \"...a runaway planet on a collision course with Earth has exploded "
+                                  "just short of us. Officials say there is no danger. However, a large object has come down near the old "
+                                  "Battlegrounds...\""),
+                                  ('goku', "The Battlegrounds? I'd better go take a look.")],
+         arrive=[('narrator', "A ship like a giant shell sits in the Battlegrounds, and soldiers in strange armour stand around it. One of "
+                  "them holds a sack. Inside: Dragon Balls."),
+                 ('slug', "The wish is made. Old age is gone, and I am young again. Now, set the machine."),
+                 ('narrator', "A rocket roars into the sky. Black cloud spreads from it until the sun is gone and the air turns bitter cold, "
+                  "all over the Earth."),
+                 ('slug', "A cold, dark planet. It will make me a fine ship. Medamatcha, Angila, Wings: deal with the Saiyan.")],
+         arrive_effects=['set_flag %d' % SKY_DARK],
+         phases=[phase('crew', [soldier('Medamatcha', 'hench7', 'medamatcha', (170, 230, 140), (60, 120, 40)),
+                                soldier('Angila', 'hench8', 'angila', (140, 220, 230), (30, 100, 120)),
+                                soldier('Wings', 'hench1', 'wings', (200, 160, 240), (90, 50, 140))], [1009, 1010, 1011], 1008),
+                 phase('one', [dict(name='Lord Slug', sprite='piccolo', look='slug', tint=recolour(SLUG_TINT), moveset=4, extra=22)], [1012], 1014,
+                       [('slug', "Must I do everything myself?"),
+                        ('goku', "You're a Namekian! Why would a Namekian want to hurt anybody?"),
+                        ('slug', "I'm nothing like those soft Namekians. Now kneel.")]),
+                 phase('one', [dict(name='Lord Slug', sprite='piccolo', look='slug2', tint=recolour(SLUG_TINT), moveset=5, extra=25, big=dict(rows=(0, 1, 5), scale=2))], [947], 946,
+                       [('slug', "You broke my arm? Then see what a Super Namekian can do."),
+                        ('narrator', "Slug's arm grows back. He tears off his helmet, and swells into a giant Namekian, tall as the ship behind him.")])],
+         ending=[('slug', "This... cannot be... my sky... my ship..."),
+                 ('narrator', "Piccolo's last strength pours into Goku. With the Kaioken burning red he punches straight through the giant, "
+                  "then flies up through the black cloud to the sun and brings a Spirit Bomb down onto Slug's freezing machine."),
+                 ('narrator', "The cloud breaks. Sunlight floods back over the Battlegrounds, and over the whole Earth.")],
+         end_effects=['do call 30 %d' % SKY_DARK],
+         reward=dict(gear=139, text="Goku found Slug's Pure Black Cape in the wreckage!"),
+         hint=None),
 ]
 BY_KEY = {f['key']: f for f in FILMS}
+WHISTLE, WHISTLE_DONE = 948, 949                            # src/bosses.c sets WHISTLE once the giant has thrown three attacks; src/flight.c runs mv_whistle
+BOSS_ACTORS = {}                                            # look -> (actor value, src/bosses.c moveset), filled by install()
+
+
+def arena(f):
+    x, y = f['centre']; return (x - 96, y - 64, x + 96, y + 64)
+
+
+def spots(f, ph):
+    """Where a phase's foes stand: soldiers in a loose line, a single foe up the middle."""
+    x, y = f['centre']
+    if ph['kind'] == 'crew': return [(x - 40, y + 6), (x + 40, y + 6), (x, y + 32)]
+    return [(x, y - 24)]
+
+
 # Cooler's own names, used by tools/movies_test.py
-C = BY_KEY['cooler']; FOREST, COOLER_MET, SQUAD_KILLED, COOLER_KILLED, COOLER_PAID, COOLER_HERE = 4, C['met'], C['killed'], C['boss_killed'], C['paid'], C['here']
+C = BY_KEY['cooler']; FOREST, COOLER_MET, COOLER_PAID, COOLER_HERE = 4, C['met'], C['paid'], C['here']
 
 
 def wild(n, x, y):
@@ -131,39 +206,85 @@ def narrate(text):
     return ['say narrator ' + p for p in split_line(text)]
 
 
+def say(st, lines):
+    o = []
+    for who, t in lines: o += narrate(t) if who == 'narrator' else st.say([dict(who=who, text=t)])
+    return o
+
+
 def lists(st):
     o = []
     for f in FILMS:
-        k, L = f['key'], f['lines']; B = lambda t: narrate('%s: %s' % (f['boss']['name'], t))
-        o += ['list mv_' + k, 'set_flag %d' % NOOP, 'unless_flag %d mv_%s_end' % (POSTGAME, k), 'if_flag %d mv_%s_end' % (f['met'], k)]
-        if f['gate']: o.append('unless_flag %d mv_%s_end' % (BY_KEY[f['gate']]['paid'], k))
-        o += narrate(L['arrive'])
-        for who, t in L['talk']: o += B(t) if who == 'boss' else st.say([dict(who='goku', text=t)])
-        o += ['set_flag %d' % f['met'], 'set_flag %d' % f['here']] + narrate(L['attack']) + ['label mv_%s_end' % k, 'stop']
+        k = f['key']
+        # the lead-in, anywhere in its area, once
+        o += ['list mv_%s_lead' % k, 'set_flag %d' % NOOP, 'unless_flag %d mv_%s_le' % (POSTGAME, k), 'if_flag %d mv_%s_le' % (f['lead'], k)]
+        if f['gate']: o.append('unless_flag %d mv_%s_le' % (BY_KEY[f['gate']]['paid'], k))
+        o += say(st, f['lead_text']) + ['set_flag %d' % f['lead'], 'label mv_%s_le' % k, 'stop']
+        # the arena
+        o += ['list mv_' + k, 'set_flag %d' % NOOP, 'unless_flag %d mv_%s_end' % (f['lead'], k), 'if_flag %d mv_%s_end' % (f['met'], k)]
+        o += say(st, f['arrive']) + f.get('arrive_effects', []) + ['set_flag %d' % f['met'], 'set_flag %d' % f['here']]
+        o += narrate("The %s's animals bolt. %s attacks!" % ({4: 'Forest', 16: 'Wilderness', 23: 'Battlegrounds'}[f['area']],
+                                                             ' and '.join(x['name'] for x in f['phases'][0]['foes'][:2]) + ' and ' + f['phases'][0]['foes'][2]['name']))
+        o += ['label mv_%s_end' % k, 'stop']
+    s = BY_KEY['slug']
+    o += ['list mv_whistle', 'set_flag %d' % NOOP, 'if_flag %d mv_wh_end' % WHISTLE_DONE, 'set_flag %d' % WHISTLE_DONE]
+    o += say(st, [('gohan1', "Hey, big guy! Cover your ears!"),
+                  ('narrator', "Gohan puts two fingers in his mouth and whistles, high and shrill. Slug staggers, clutching the sides of his head."),
+                  ('piccolo', "Namekian ears can't stand that pitch. Now, Goku!")])
+    o += ['label mv_wh_end', 'stop']
     return o
+
+
+def later(named): return [(WHISTLE, named['mv_whistle'])]
 
 
 def checks(st):
-    """In side_check: each crew's fall brings its villain; the villain's fall pays."""
+    """In side_check: each phase's fall plays the next one's scene (its foes then appear); the last pays."""
     o = []
     for f in FILMS:
-        k, L, R = f['key'], f['lines'], f['reward']; B = lambda t: narrate('%s: %s' % (f['boss']['name'], t))
-        o += ['if_flag %d mv_%s_sq' % (f['boss_killed'], k)] + ['unless_flag %d mv_%s_sq' % (f['killed'] + i, k) for i in range(3)]
-        o += ['if_flag %d mv_%s_sq' % (f['said'], k), 'set_flag %d' % f['said']] + B(L['crew_down']) + ['label mv_%s_sq' % k]
-        o += ['if_flag %d mv_%s_co' % (f['paid'], k), 'unless_flag %d mv_%s_co' % (f['boss_killed'], k), 'set_flag %d' % f['paid'], 'do call 30 %d' % f['here']]
-        o += B(L['boss_down']) + narrate(L['after']) + ['do call 194 %d' % (st.bal.quest_exp(41, True) * f['exp'])]
+        k, R = f['key'], f['reward']
+        for i in range(1, len(f['phases'])):
+            prev, ph = f['phases'][i - 1], f['phases'][i]; lab = 'mv_%s_p%d' % (k, i)
+            o += ['if_flag %d %s' % (ph['said'], lab)] + ['unless_flag %d %s' % (fl, lab) for fl in prev['kills']] + ['set_flag %d' % ph['said']]
+            o += say(st, ph['intro']) + ph['effects'] + ['label ' + lab]
+        last = f['phases'][-1]; lab = 'mv_%s_won' % k
+        o += ['if_flag %d %s' % (f['paid'], lab)] + ['unless_flag %d %s' % (fl, lab) for fl in last['kills']]
+        o += ['set_flag %d' % f['paid'], 'do call 30 %d' % f['here']] + say(st, f['ending']) + f.get('end_effects', [])
+        o += ['do call 194 %d' % (st.bal.quest_exp(41, True) * f['exp'])]
         if R.get('fruit'): o += ['set_flag %d' % DB_POWER] + narrate("Goku ate the fruit of the Tree of Might! His strength, power and endurance rose.")
-        o += ['do call 147 %d' % R['gear']] + narrate(R['text']) + (narrate(L['hint']) if L['hint'] else []) + ['label mv_%s_co' % k]
+        o += ['do call 147 %d' % R['gear']] + narrate(R['text']) + (narrate(f['hint']) if f['hint'] else []) + ['label ' + lab]
     return o
+
+
+def big_data(actors, s):
+    """A big villain's figure for src/flight.c's 32x64 sprite: three poses (two walking, one casting), each four directions of 2 KB.
+    The Great Ape is LoG1's own 32x64 sprite; giant Slug is Piccolo's frames in Slug's colours at twice the size (a pose too wide for that
+    keeps its walking frame)."""
+    import log1_actors, log1_sprites as S
+    rec = S.record(actors.log1, actors.log1[S.SETS + actors.names.index(s['sprite'])]); cmap = S.colour_map(actors.log1, rec, actors.r, s.get('tint'))
+    sets = []
+    for row in s['big']['rows']:
+        if 'scale' not in s['big']: sets += actors.big_images(rec, row, cmap); continue
+        ims = []
+        for c in range(3):
+            im = S.cell(actors.log1, rec, row, c, cmap)
+            xs = np.nonzero(im)[1] if im is not None else []
+            if im is None or not len(xs) or (xs.max() - xs.min() + 1) * s['big']['scale'] > 32: im = S.cell(actors.log1, rec, s['big']['rows'][0], c, cmap)
+            ims.append(log1_actors.upscaled(im, s['big']['scale']))
+        sets += [ims[0], ims[1], ims[2], ims[2][:, ::-1]]
+    return actors.ins.put(log1_actors.big_tiles(sets))
 
 
 def install(n, a, fits, r, actors, put, named, spawns, foe, walkins, BF_IDX):
     for f in FILMS:
+        if n == f['lead_area']: walkins.append((n, 0, 0, a.W * 8, a.H * 8, named['mv_%s_lead' % f['key']]))      # anywhere in the area
         if n != f['area']: continue
-        walkins.append((n,) + f['arena'] + (named['mv_' + f['key']],))       # walking into the arena
-        for i, s in enumerate(f['crew']):
-            foe(s['sprite'], s['at'][0], s['at'][1], 'set:%d & clear:%d' % (f['met'], f['killed'] + i), f['killed'] + i, s['extra'], True, 41,
-                tint=s['tint'], look=s['look'])
-        b = f['boss']
-        foe(b['sprite'], b['at'][0], b['at'][1], ' & '.join(['set:%d' % (f['killed'] + i) for i in range(3)] + ['clear:%d' % f['boss_killed']]),
-            f['boss_killed'], b['extra'], True, 41, tint=b.get('tint'), look=b['look'])
+        walkins.append((n,) + arena(f) + (named['mv_' + f['key']],))       # walking into the arena
+        for ph in f['phases']:
+            for i, (s, at) in enumerate(zip(ph['foes'], spots(f, ph))):
+                if 'moveset' in s:
+                    v = actors.actor(s['sprite'], True, s.get('tint'), s['look']); big = 0
+                    if 'big' in s: actors.hidden(v); big = big_data(actors, s)
+                    BOSS_ACTORS[s['look']] = (v, s['moveset'], big)
+                foe(s['sprite'], at[0], at[1], 'set:%d & clear:%d' % (ph['said'], ph['kills'][i]), ph['kills'][i],
+                    s.get('extra', 8 + 2 * FILMS.index(f)), True, 41, tint=s.get('tint'), look=s['look'])
