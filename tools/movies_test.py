@@ -133,14 +133,15 @@ def lead(f, tag):
     go(f['lead_area'], tag); moves(); run(['20 LEFT', '20 RIGHT', '30'] + ['2 A', '30'] * 16 + ['200'], tag)
 def stats(): return list(rd(REC + 0x28, 3))
 def area_no(): return rd(struct.unpack('<I', rd(0x03001980, 4))[0] + 1, 1)[0] - 1
-def text_done(tag, tries=40):
-    """Through any open text: A only while Goku can't take a step (a strong Goku's stray punches would beat the next phase)."""
+def text_done(tag, tries=40, safe=None):
+    """Through any open text: A only while Goku can't take a step (a strong Goku's stray punches would beat the next phase). safe: a spot
+    away from the fight to stand on while pressing it (a hit knocks him down, and he can't step then either)."""
     for i in range(tries):
         a = pos(); run(['6 DOWN', '4'], tag)
         if pos() != a: run(['6 UP', '4'], tag); return True
         run(['6 LEFT', '4'], tag)
         if pos() != a: run(['6 RIGHT', '4'], tag); return True
-        run(['2 A', '30'], tag)
+        run((place(*safe) if safe else []) + ['2 A', '30'], tag)
     return False
 def senzu(): return rd(0x0300106A + 11, 1)[0]                      # Buu's Fury's item counts (tools/dragonball_test.py's ITEMS)
 BIG_OBJ = 0x03005F60
@@ -182,7 +183,7 @@ for k, f in enumerate(M.FILMS):
     check('%s\'s soldiers fall' % villain, ok and all(flag(x) for x in f['phases'][0]['kills']), [flag(x) for x in f['phases'][0]['kills']])
     for i, ph in enumerate(f['phases'][1:], 1):
         s = ph['foes'][0]; tag = '%s%d' % (f['key'], i)
-        text_done(tag); run(place(f['centre'][0], f['centre'][1] + 50) + ['120', 'shot ' + tag], tag); b = near(foes())
+        text_done(tag, safe=approach(f)[:2]); run(place(f['centre'][0], f['centre'][1] + 50) + ['120', 'shot ' + tag], tag); b = near(foes())
         check('%s: %s (%s)' % (f['key'], s['name'], s['look']), flag(ph['said']) == 1 and len(b) == 1 and not flag(ph['kills'][0]), (flag(ph['said']), b))
         if s['look'] == 'cooler2': check('Gohan brings Goku a Senzu Bean', senzu() == sz0 + 1, (sz0, senzu()))
         if 'big' in s: check('%s is drawn big' % s['name'], b and big() == b[0][0], (hex(big()), b))
@@ -195,7 +196,7 @@ for k, f in enumerate(M.FILMS):
             for r_ in range(10): L += w32(0x03001574, 999 << 16) + ['120']
             run(L + ['shot slug_whistle'], 'whistle'); text_done('whistle')
             check('Gohan\'s whistle after giant Slug\'s third attack', flag(M.WHISTLE_DONE) == 1, flag(M.WHISTLE_DONE))
-        ok = beat('b%s' % tag, until=ph['kills'][0]); text_done('b%s' % tag); run(['60'], 'b%s' % tag)
+        ok = beat('b%s' % tag, until=ph['kills'][0]); text_done('b%s' % tag, safe=approach(f)[:2]); run(['60'], 'b%s' % tag)
         check('%s falls' % s['name'], ok and flag(ph['kills'][0]) == 1 and (not ('big' in s) or big() == 0), (ok, flag(ph['kills'][0]), hex(big())))
     run(['60'], 'won%d' % k); text_done('won%d' % k); run(['300'] + (place(*approach(f)[:3]) if 'end_effects' not in f or f['key'] != 'bardock' else []) + ['30'], 'won%d' % k)
     if f['key'] == 'bardock': check('Goku wakes at the Crash Site, himself again', rec(0)['form'] == 0 and area_no() == 9, (rec(0), area_no()))     # off the spot the test punched from, which can be inside a tree
