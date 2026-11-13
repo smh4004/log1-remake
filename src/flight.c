@@ -436,12 +436,18 @@ typedef struct { u32 flag, list, gfx; } it_t;
 /* Shenron's wishes: the same picker with its own rows ({always-set flag, list, picture}); B doesn't close it. WISH_ASK (a flag, set by the summon
    list) opens it. */
 __attribute__((section(".text.table"))) volatile const u32 wish_ptr = 0, wish_ask = 0;
+/* Porunga's wishes (Expanded Namek, tools/log1_namek.py): the same, with their own rows and flag; each wish's list asks again until the third. */
+__attribute__((section(".text.table"))) volatile const u32 porunga_ptr = 0, porunga_ask = 0;
 static int it_seen(const it_t *t) { return FLAGS[t->flag >> 3] >> (t->flag & 7) & 1; }
 static u32 live_it(u32 k) {
     const it_t *t; int n = 0, i;
     if (!PICK_ON && wish_ptr && wish_ask && (FLAGS[wish_ask >> 3] >> (wish_ask & 7) & 1) && PLAYER && !ZBUSY) {
         FLAGS[wish_ask >> 3] &= ~(1 << (wish_ask & 7));
         PICK_TABLE = wish_ptr; PICK_ON = 1; PICK_SHOWN = 0; PICK_PREV = k; PICK_IDX = 0; IT_PENDING = 0;
+    }
+    if (!PICK_ON && porunga_ptr && porunga_ask && (FLAGS[porunga_ask >> 3] >> (porunga_ask & 7) & 1) && PLAYER && !ZBUSY) {
+        FLAGS[porunga_ask >> 3] &= ~(1 << (porunga_ask & 7));
+        PICK_TABLE = porunga_ptr; PICK_ON = 1; PICK_SHOWN = 0; PICK_PREV = k; PICK_IDX = 0; IT_PENDING = 0;
     }
     t = (const it_t *)(PICK_ON ? PICK_TABLE : it_ptr);
     if (!t) return k;
@@ -458,7 +464,7 @@ static u32 live_it(u32 k) {
     u32 nw = k & ~PICK_PREV; PICK_PREV = k;
     int d = nw & 0x90 ? 1 : nw & 0x60 ? -1 : 0;
     if (d) for (i = 1; i <= n; i++) { int j = (PICK_IDX + d * i + n * n) % n; if (it_seen(&t[j])) { PICK_IDX = j; break; } }
-    if ((nw & 2) && PICK_TABLE != wish_ptr) PICK_ON = 0;
+    if ((nw & 2) && PICK_TABLE != wish_ptr && PICK_TABLE != porunga_ptr) PICK_ON = 0;
     else if (nw & 1) {
         PICK_ON = 0;
         if (it_seen(&t[PICK_IDX])) { u32 zone[6] = {0, 0, 0, 0, 0, t[PICK_IDX].list}; ZBUSY = 1; ((fn2)0x080073F1)(zone, PLAYER); ZBUSY = 0; }

@@ -96,7 +96,7 @@ class Side:
             o += ['if_flag %d sc%d' % (PAID + i, i), 'unless_flag %d sc%d' % (KILLED + i, i), 'set_flag %d' % (PAID + i)]
             for t in b['paid']: o += say(None, t)
             o += ['do call 194 %d' % self.st.bal.quest_exp(b['area'], True)] + (['do call 147 %d' % b['gear']] if 'gear' in b else []) + ['label sc%d' % i]
-        o += self.more_checks() + __import__('log1_party').checks(self.st) + __import__('log1_movies').checks(self.st)
+        o += self.more_checks() + __import__('log1_party').checks(self.st) + __import__('log1_movies').checks(self.st) + __import__('log1_namek').checks(self.st)
         o += ['if_flag %d sc_s' % STEVE_PAID, 'unless_flag %d sc_s' % STEVE_DEAD, 'set_flag %d' % STEVE_PAID]
         for t in STEVE['paid']: o += say(None, t)
         o += ['do call 194 %d' % self.st.bal.quest_exp(HELL, True), 'do call 147 %d' % STEVE['gear'], 'label sc_s', 'stop']
@@ -195,6 +195,10 @@ class Side:
         if n == ELDER['area']: npc(ELDER, 'side_elder')
         __import__('log1_party').install(n, a, fits, r, actors, put, named, spawns, foe, BF_IDX)
         __import__('log1_movies').install(n, a, fits, r, actors, put, named, spawns, foe, walkins, BF_IDX)
+        def npc_tinted(sprite, x, y, talk, tint=None, look=None):
+            if tint is None and look is None: return npc_rec(sprite, x, y, talk)
+            idx = actors.actor(sprite, False, tint, look); rec = put(struct.pack('<9I', 0x0800A223, 0x32, 0x08017DA3, 0x20002, (y << 16) | x, talk, idx, 1, 0)); struct.pack_into('<I', r, rec - BB + 32, rec); return rec + 8, idx
+        __import__('log1_namek').install(n, a, fits, r, actors, put, named, spawns, foe, walkins, BF_IDX, spot, npc_tinted)
         if n == ANNOUNCER['area']:
             npc(ANNOUNCER, 'side_announcer')
             for i, m in enumerate(REMATCHES): foe(m['sprite'], m['at'][0], m['at'][1], 'set:%d & clear:%d' % (RM_OPEN + i, RM_KILLED + i), RM_KILLED + i, m['extra'], True, 41)

@@ -12,7 +12,7 @@ IDS = [int(v) for v in os.environ['IDS'].split(',')] if os.environ.get('IDS') el
 
 
 def main():
-    DEPS = sys.argv[1]; L = log1_split.build(os.path.join(DEPS, 'log1-decomp')); log1_yardrat.add_area(L); __import__('log1_bardock').add_area(L); bf = os.path.join(ROOT, 'rom', 'bf.gba'); O = os.path.join(ROOT, 'out', 'slice'); os.makedirs(os.path.join(O, 'text'), exist_ok=True)
+    DEPS = sys.argv[1]; L = log1_split.build(os.path.join(DEPS, 'log1-decomp')); log1_yardrat.add_area(L); __import__('log1_bardock').add_area(L); __import__('log1_namek').add_areas(L); bf = os.path.join(ROOT, 'rom', 'bf.gba'); O = os.path.join(ROOT, 'out', 'slice'); os.makedirs(os.path.join(O, 'text'), exist_ok=True)
     conv = os.path.join(ROOT, 'out', 'converted', 'scenes.json')
     if not os.path.exists(conv): subprocess.check_call([sys.executable, os.path.join(ROOT, 'tools', 'log1_scenes.py')])
     base = bytearray(open(bf, 'rb').read()); plan = log1_portraits.plan(L, os.path.join(DEPS, 'buusfury-decomp'), base)
@@ -45,7 +45,11 @@ def main():
     for f_, lst, art_ in log1_dragonballs.wish_rows(log1, r, scenes.NAMED):        # Shenron's wishes, the same kind of pictures
         while len(r) % 4: r.append(0)
         wish_rows.append((f_, lst, 0x08000000 + len(r))); r += art_
-    print('hook', build_flight.install(r, spawns, walks, picks, foes, zones, qc, follows, fly, log1_world.art(), log1_world.markers(), walkins, scenes.NAMED['game_saved'], pose_rows, scenes.NAMED['new_game_opening'], it_rows, scenes.NAMED['party_switch'], wish_rows, log1_dragonballs.DB_WISH_ASK, log1_dragonballs.later(scenes.NAMED) + __import__('log1_movies').later(scenes.NAMED)), 'spawns', len(spawns), 'walks', len(walks), 'pickups', len(picks), 'enemies', len(foes), 'hurt zones', len(zones), 'walk-in zones', len(walkins))
+    porunga = []
+    for f_, lst, art_ in __import__('log1_namek').porunga_rows(log1, r, scenes.NAMED):     # Porunga's wishes (Expanded Namek)
+        while len(r) % 4: r.append(0)
+        porunga.append((f_, lst, 0x08000000 + len(r))); r += art_
+    print('hook', build_flight.install(r, spawns, walks, picks, foes, zones, qc, follows, fly, log1_world.art(), log1_world.markers(), walkins, scenes.NAMED['game_saved'], pose_rows, scenes.NAMED['new_game_opening'], it_rows, scenes.NAMED['party_switch'], wish_rows, log1_dragonballs.DB_WISH_ASK, log1_dragonballs.later(scenes.NAMED) + __import__('log1_movies').later(scenes.NAMED), porunga, __import__('log1_namek').PG_ASK), 'spawns', len(spawns), 'walks', len(walks), 'pickups', len(picks), 'enemies', len(foes), 'hurt zones', len(zones), 'walk-in zones', len(walkins))
     json.dump(dict({str(n): scenes.NAMED['dbg_%d' % n] for n in IDS}, **{'x%d' % n: scenes.NAMED['dbgx_%d' % n] for n in IDS}, **{k: v for k, v in scenes.NAMED.items() if k.startswith('dbgscene_')}), open(os.path.join(O, os.environ.get('OUT', 'slice') + '.lists.json'), 'w'))
     while len(r) % 0x10000: r.append(0xFF)
     log1_start.identity(r)

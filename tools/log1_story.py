@@ -24,7 +24,7 @@ MUSIC_BASE = 53                                        # log1_music.BASE: LoG1's
 EV, PENDING = 720, 893   # one-shot event flags; a story enemy died, so the map-wide zone should run quest_check
 PF = 100                                               # area pickups: PF.. one flag each (Buu's Fury's own story, which used these, is gone)
 WORLD = 26
-SPEAKER = dict(goku='goku'); NAME = dict(slug='Lord Slug', roshi='Master Roshi', chichi='Chi-Chi', kingkai='King Kai', kingyema='King Yemma', korrin='Korin', popo='Mr. Popo', raditz='Raditz', nappa='Nappa')
+SPEAKER = dict(goku='goku'); NAME = dict(slug='Lord Slug', moori='Elder Moori', roshi='Master Roshi', chichi='Chi-Chi', kingkai='King Kai', kingyema='King Yemma', korrin='Korin', popo='Mr. Popo', raditz='Raditz', nappa='Nappa')
 
 
 def _with_energy():
@@ -227,7 +227,7 @@ class Story:
                     if later['fn'] == '0800CB25' and lb[0] == who: x, y = struct.unpack_from('<HH', lb, 4); break
                 if nm == 'goku' or self.movable(area, who): continue    # already on the map: walking it to where a copy stands would never finish
                 if nm and area in self.areas and x and y:
-                    appeared.add(who); where[who] = (x, y); flag = SPAWN_FLAG + 2 * len(self.scene_spawns); assert flag + 1 < 940, 'scene spawn flags reach the movie bosses\' (log1_movies, 940-957)'; self.scene_spawns.append((area, flag, nm, x, y, flag + 1)); light(); r.append('do call 29 %d; call 136 10' % flag); self._scene_end = getattr(self, '_scene_end', []) + [flag + 1]; continue
+                    appeared.add(who); where[who] = (x, y); flag = SPAWN_FLAG + 2 * len(self.scene_spawns); assert flag + 1 < 920, 'scene spawn flags reach Expanded Namek\'s (log1_namek, 920-939)'; self.scene_spawns.append((area, flag, nm, x, y, flag + 1)); light(); r.append('do call 29 %d; call 136 10' % flag); self._scene_end = getattr(self, '_scene_end', []) + [flag + 1]; continue
             if f == '0800DF15':                                  # the closing text
                 a_ = struct.unpack_from('<I', b)[0] & 0x1FFFFFF; r += ['narrate ' + p for p in split_line(self.rom[a_:self.rom.index(b'\0', a_)].decode('latin1').replace('{', '(').replace('}', ')').strip())]; continue
             if f == '0800CB25' or f == '0800D9C5':
@@ -397,7 +397,7 @@ class Story:
             spot = next(((t['to_x'], t['to_y']) for m in self.areas.values() for t in m['triggers'] if t['kind'] == 'warp' and t['to_area'] == n), None)
             if not spot: spot = next(((b['x'], b['y']) for x in self.q for b in x['actions'] if b['type'] == 'warp' and b['area'] == n), None)
             if not spot: spot = next(((b['to_x'], b['to_y']) for x in self.q for b in x['actions'] if b['type'] == 'add_warp' and b['to_area'] == n), None)
-            if not spot and n in (log1_yardrat.AREA, 70): spot = tuple(a['start'])
+            if not spot and n in (log1_yardrat.AREA, 70, 71, 72): spot = tuple(a['start'])
             if not spot: spot = next(((t['x'] - 20, t['y']) for t in a['actors']), (64, 64))
             r += ['list dbg_%d' % n, 'set_flag %d' % NOOP] + self.warp(n, *spot) + ['stop']
             if self.bal: r += ['list dbgx_%d' % n, 'set_flag %d' % NOOP, 'do call 194 %d' % self.bal.exp[self.bal_level(n) + 1], 'stop']
@@ -448,6 +448,6 @@ class Story:
     def generate(self, path):
         self.out += ['list new_game_opening', 'set_flag %d' % NOOP, 'do call 120 1; call 29 958; call 136 4', 'do call 119 26 1 1 %d %d; call 136 2; call 121 15' % NEW_GAME_SPOT, 'stop']
         self.out += ['list game_saved', 'narrate Game saved.']
-        chk = self.check_list(); self.talk_lists(); self.place_lists(); self.pickup_lists(); self.zone_lists(); self.out = chk + self.out + world_lists(self.ids) + self.test_warps() + self.side.lists() + log1_yardrat.lists(self, self.log1dir) + log1_party.lists(self) + log1_dragonballs.lists(self) + __import__('log1_movies').lists(self)
+        chk = self.check_list(); self.talk_lists(); self.place_lists(); self.pickup_lists(); self.zone_lists(); self.out = chk + self.out + world_lists(self.ids) + self.test_warps() + self.side.lists() + log1_yardrat.lists(self, self.log1dir) + log1_party.lists(self) + log1_dragonballs.lists(self) + __import__('log1_movies').lists(self) + __import__('log1_namek').lists(self) + __import__('log1_namek').door_lists(self)
         open(path, 'w', encoding='utf-8').write('\n'.join(self.out) + '\n')
         return dict(lines=sum(l.startswith('say') or l.startswith('narrate') for l in self.out), steps=len(self.out), doors=sum(map(len, self.doors.values())), hostile=len(self.hostile), walks=len(self.walks), flags_state=sum(map(len, self.state.values())), log=dict(self.log))

@@ -18,9 +18,10 @@ PIC_FIRST, PICS, PIC_TABLE = 54, 15, 0x5C2198                          # LoG1's 
 
 YARDRAT = 69                                                           # tools/log1_yardrat.py: a post-game area after the pictures
 VISION = 70                                                            # tools/log1_bardock.py: Planet Vegeta, in Bardock's vision (post-game)
+NAMEK_NEW = [71, 72, 73, 74]                                           # tools/log1_namek.py: Moori's Village, the Namek Highlands, two houses
 
 
-def ids(): return ALL + [FIRST + k for k in range(12)] + [PIC_FIRST + k for k in range(PICS)] + [YARDRAT, VISION]
+def ids(): return ALL + [FIRST + k for k in range(12)] + [PIC_FIRST + k for k in range(PICS)] + [YARDRAT, VISION] + NAMEK_NEW
 
 
 def add_pictures(L, out):
