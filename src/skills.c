@@ -380,6 +380,28 @@ void it_use(u8 *record, void *sprite) { if (foe_near()) IT_Use(record, sprite); 
    direction to pick a skill at once (up the 1st, right the 2nd, down the 3rd, left the 4th). Not while flying, where L takes off to the world map
    (src/flight.c), nor on that map (Buu's Fury's 0:50). */
 #define FLYING (*(volatile u8 *)0x03006105)
+/* The Dragon Ball hunt (tools/log1_dragonballs.py) asks for these by flag, since a scene list can't change a record or the inventory itself. */
+#define SETF(f) (FLAGS[(f) >> 3] |= 1 << ((f) & 7))
+#define CLRF(f) (FLAGS[(f) >> 3] &= ~(1 << ((f) & 7)))
+static void dragon_balls(void) {
+    int i, out = FLAG(DB_ROUND) ? DB_BALL_B : DB_BALL, away = out == DB_BALL ? DB_BALL_B : DB_BALL;
+    u8 *r;
+    for (i = 0; i < 7; i++) {
+        SETF(away + i);                                                         /* the set that isn't out never shows */
+        if (!FLAG(DB_RADAR)) SETF(out + i);                                     /* and with no radar yet, neither does the other */
+    }
+    if (FLAG(DB_SCATTER)) {                                                     /* after a wish: the balls fly apart, to the other set's spots */
+        CLRF(DB_SCATTER);
+        if (FLAG(DB_ROUND)) CLRF(DB_ROUND); else SETF(DB_ROUND);
+        for (i = 0; i < 7; i++) { CLRF(away + i); SETF(out + i); *(u8 *)(0x0300106A + 16 + i) = 0; }
+    }
+    if (FLAG(DB_POWER)) {                                                       /* "Make me stronger": +5 strength, power and endurance */
+        CLRF(DB_POWER); r = rec_of(CUR);
+        for (i = 0; i < 3; i++) r[0x28 + i] = r[0x28 + i] > 250 ? 255 : r[0x28 + i] + 5;
+    }
+    if (FLAG(DB_MASTERY)) { CLRF(DB_MASTERY); MASTERY[0] = MASTERY[1] = MASTERY_L3; }  /* Kaioken and Super Saiyan at Level 3 */
+}
+
 u16 *player_input(void) {
     u16 *keys = ((u16 *(*)(void))0x0804F8C9)();
     u8 *rec = rec_of(CUR);
@@ -387,6 +409,7 @@ u16 *player_input(void) {
     int d, i;
     kk_track();
     if (CUR == 4) FLAGS[AS_VEGETA >> 3] |= 1 << (AS_VEGETA & 7); else FLAGS[AS_VEGETA >> 3] &= ~(1 << (AS_VEGETA & 7));     /* the gravity room's holograms are for Vegeta */
+    dragon_balls();
     rec_of(0)[0] |= 1;      /* Goku is in the party: the pause menu lists party members (record +0 bit 0) and, with none, reads a stale entry and crashes */
     if (CUR == 0 && (FRAMES & 63) == 0) skills_sync();
     if (!(keys[1] & 0x200) || FLYING || (AREA && *(u16 *)AREA == (0 | 50 << 8))) return keys;

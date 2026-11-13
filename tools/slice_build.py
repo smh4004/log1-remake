@@ -5,7 +5,7 @@
 import collections, json, os, struct, subprocess, sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path[:0] = [os.path.join(ROOT, 'tools'), os.path.join(ROOT, 'vendor', 'gero-tools', 'tools')]
-import build_skills, log1_party, log1_yardrat, log1_start, log1_balance, log1_music, log1_split, build_flight, log1_actors, log1_areas, log1_portraits, log1_story, log1_world, scenes, text_tool  # noqa: E402
+import build_skills, log1_dragonballs, log1_party, log1_yardrat, log1_start, log1_balance, log1_music, log1_split, build_flight, log1_actors, log1_areas, log1_portraits, log1_story, log1_world, scenes, text_tool  # noqa: E402
 
 
 IDS = [int(v) for v in os.environ['IDS'].split(',')] if os.environ.get('IDS') else log1_split.ids(); LAST_QUEST = int(os.environ.get('LAST_QUEST', 74))
@@ -41,7 +41,11 @@ def main():
     for f_, lst, art_ in log1_yardrat.picker_rows(log1, r, scenes.NAMED):          # Instant Transmission's pictures, after everything so far
         while len(r) % 4: r.append(0)
         it_rows.append((f_, lst, 0x08000000 + len(r))); r += art_
-    print('hook', build_flight.install(r, spawns, walks, picks, foes, zones, qc, follows, fly, log1_world.art(), log1_world.markers(), walkins, scenes.NAMED['game_saved'], pose_rows, scenes.NAMED['new_game_opening'], it_rows, scenes.NAMED['party_switch']), 'spawns', len(spawns), 'walks', len(walks), 'pickups', len(picks), 'enemies', len(foes), 'hurt zones', len(zones), 'walk-in zones', len(walkins))
+    wish_rows = []
+    for f_, lst, art_ in log1_dragonballs.wish_rows(log1, r, scenes.NAMED):        # Shenron's wishes, the same kind of pictures
+        while len(r) % 4: r.append(0)
+        wish_rows.append((f_, lst, 0x08000000 + len(r))); r += art_
+    print('hook', build_flight.install(r, spawns, walks, picks, foes, zones, qc, follows, fly, log1_world.art(), log1_world.markers(), walkins, scenes.NAMED['game_saved'], pose_rows, scenes.NAMED['new_game_opening'], it_rows, scenes.NAMED['party_switch'], wish_rows, log1_dragonballs.DB_WISH_ASK, log1_dragonballs.later(scenes.NAMED)), 'spawns', len(spawns), 'walks', len(walks), 'pickups', len(picks), 'enemies', len(foes), 'hurt zones', len(zones), 'walk-in zones', len(walkins))
     json.dump(dict({str(n): scenes.NAMED['dbg_%d' % n] for n in IDS}, **{'x%d' % n: scenes.NAMED['dbgx_%d' % n] for n in IDS}, **{k: v for k, v in scenes.NAMED.items() if k.startswith('dbgscene_')}), open(os.path.join(O, os.environ.get('OUT', 'slice') + '.lists.json'), 'w'))
     while len(r) % 0x10000: r.append(0xFF)
     log1_start.identity(r)

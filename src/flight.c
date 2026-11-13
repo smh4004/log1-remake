@@ -297,7 +297,17 @@ void flight_draw(int list) {
 #define BLDY_ (*(volatile u16 *)0x04000054)
 #define FLASH_LEFT (*(volatile u8 *)0x03005F20)
 #define BLD_KEEP (*(volatile u16 *)0x03005F22)
+#define DARK_FLAG 796                       /* the Dragon Ball summon: the world dims while Shenron is out (tools/log1_dragonballs.py) */
+#define DARK_ON (*(volatile u8 *)0x03005F25)
+#define DARK_KEEP (*(volatile u16 *)0x03005F26)
+static void live_dark(void) {
+    if (FLAGS[DARK_FLAG >> 3] >> (DARK_FLAG & 7) & 1) {
+        if (!DARK_ON) { DARK_ON = 1; DARK_KEEP = BLDCNT_; }
+        BLDCNT_ = 0xC0 | 0x3E; BLDY_ = 9;                 /* darken BG1-3, sprites and the backdrop; BG0 (the text box) stays bright */
+    } else if (DARK_ON) { DARK_ON = 0; BLDCNT_ = DARK_KEEP; BLDY_ = 0; }
+}
 static void live_pictures(void) {
+    live_dark();
     if (!PLAYER) return;
     if (FLAGS[PIC_SAVE >> 3] >> (PIC_SAVE & 7) & 1) { FLAGS[PIC_SAVE >> 3] &= ~(1 << (PIC_SAVE & 7)); PX = *(int *)(PLAYER + 0x1A0); PY = *(int *)(PLAYER + 0x1A4); }
     if (FLAGS[PIC_BACK >> 3] >> (PIC_BACK & 7) & 1) { FLAGS[PIC_BACK >> 3] &= ~(1 << (PIC_BACK & 7)); *(int *)(PLAYER + 0x1A0) = PX; *(int *)(PLAYER + 0x1A4) = PY; }
@@ -414,12 +424,22 @@ typedef struct { u32 flag, list, gfx; } it_t;
 #define PICK_SHOWN (*(volatile u8 *)0x03005F32)     /* PICK_IDX + 1 when its picture is in VRAM */
 #define PICK_PREV (*(volatile u16 *)0x03005F34)
 #define PICK_TILE 256                                /* 0x06012000 */
+#define PICK_TABLE (*(volatile u32 *)0x03005F38)     /* the open picker's rows: it_ptr, or wish_ptr (Shenron) */
+/* Shenron's wishes: the same picker with its own rows ({always-set flag, list, picture}); B doesn't close it. WISH_ASK (a flag, set by the summon
+   list) opens it. */
+__attribute__((section(".text.table"))) volatile const u32 wish_ptr = 0, wish_ask = 0;
 static int it_seen(const it_t *t) { return FLAGS[t->flag >> 3] >> (t->flag & 7) & 1; }
 static u32 live_it(u32 k) {
-    const it_t *t = (const it_t *)it_ptr; int n = 0, i;
+    const it_t *t; int n = 0, i;
+    if (!PICK_ON && wish_ptr && wish_ask && (FLAGS[wish_ask >> 3] >> (wish_ask & 7) & 1) && PLAYER && !ZBUSY) {
+        FLAGS[wish_ask >> 3] &= ~(1 << (wish_ask & 7));
+        PICK_TABLE = wish_ptr; PICK_ON = 1; PICK_SHOWN = 0; PICK_PREV = k; PICK_IDX = 0; IT_PENDING = 0;
+    }
+    t = (const it_t *)(PICK_ON ? PICK_TABLE : it_ptr);
     if (!t) return k;
     while (t[n].flag) n++;
     if (IT_PENDING && !PICK_ON && PLAYER && !ZBUSY && n) {
+        PICK_TABLE = it_ptr;
         IT_PENDING = 0; PICK_ON = 1; PICK_SHOWN = 0; PICK_PREV = k; PICK_IDX = 0;
         if (AREA) for (i = 0; i < n; i++) if (t[i].flag == 800u + *(u8 *)(AREA + 1) - 1) PICK_IDX = i;        /* start on where Goku is */
         if (!it_seen(&t[PICK_IDX])) for (i = 0; i < n; i++) if (it_seen(&t[i])) { PICK_IDX = i; break; }
@@ -429,7 +449,7 @@ static u32 live_it(u32 k) {
     u32 nw = k & ~PICK_PREV; PICK_PREV = k;
     int d = nw & 0x90 ? 1 : nw & 0x60 ? -1 : 0;
     if (d) for (i = 1; i <= n; i++) { int j = (PICK_IDX + d * i + n * n) % n; if (it_seen(&t[j])) { PICK_IDX = j; break; } }
-    if (nw & 2) PICK_ON = 0;
+    if ((nw & 2) && PICK_TABLE != wish_ptr) PICK_ON = 0;
     else if (nw & 1) {
         PICK_ON = 0;
         if (it_seen(&t[PICK_IDX])) { u32 zone[6] = {0, 0, 0, 0, 0, t[PICK_IDX].list}; ZBUSY = 1; ((fn2)0x080073F1)(zone, PLAYER); ZBUSY = 0; }
@@ -437,8 +457,8 @@ static u32 live_it(u32 k) {
     return 0;
 }
 static void it_draw(void) {
-    if (!PICK_ON || !it_ptr) return;
-    const it_t *t = (const it_t *)it_ptr;
+    if (!PICK_ON || !PICK_TABLE) return;
+    const it_t *t = (const it_t *)PICK_TABLE;
     if (PICK_SHOWN != PICK_IDX + 1) {
         const u32 *s = (const u32 *)t[PICK_IDX].gfx; volatile u32 *v = (volatile u32 *)(0x06010000 + PICK_TILE * 32);
         for (int i = 0; i < 192 * 32 / 4; i++) v[i] = s[i];
@@ -450,11 +470,26 @@ static void it_draw(void) {
     }
 }
 
+/* Lists run on a flag, for a list that can't call another: {flag, list} pairs ending in flag 0. When a flag is set and nothing else runs, it is
+   cleared and its list runs (the seventh Dragon Ball's pickup asks for Shenron this way). */
+__attribute__((section(".text.table"))) volatile const u32 later_ptr = 0;
+static void live_later(void) {
+    const u32 *t = (const u32 *)later_ptr;
+    if (!t || !PLAYER || ZBUSY || PICK_ON || STATE[1]) return;
+    for (; t[0]; t += 2)
+        if (FLAGS[t[0] >> 3] >> (t[0] & 7) & 1) {
+            FLAGS[t[0] >> 3] &= ~(1 << (t[0] & 7));
+            { u32 zone[6] = {0, 0, 0, 0, 0, t[1]}; ZBUSY = 1; ((fn2)0x080073F1)(zone, PLAYER); ZBUSY = 0; }
+            return;
+        }
+}
+
 void flight_keys(u8 *st) {
     ram_init();
     live_pictures();
     u32 k = live_it(~(u32)KEYS & 0xFFFF);
     k = live_save(k);
+    live_later();
     ((fn2)0x0804023D)(st, k);
     if (!(~*(u16 *)(st + 2) & 0xF) && st[1] && (*(u16 *)(st + 4) & 0xF)) ((fn0)0x0803FA0D)();
     int fresh = AREA != LAST;

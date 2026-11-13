@@ -93,7 +93,7 @@ STORY_FONT, T_CORNER, T_SIDE, T_TOP, T_FILL = 0x15B2F0, 100, 103, 102, 104
 MENU_SLOTS = {2, 8, 9, 103, 193, 217, 218, 223, 224, 225, 236}
 
 
-def picker_art(log1, bf, name):
+def picker_art(log1, bf, name, title='Instant Transmission'):
     """192x32 8bpp, as three 64x32 sprites one after another (each 8x4 tiles of 64 bytes, row by row)."""
     import bios, mapkit
     B = 0x08000000; f = struct.unpack_from('<II', log1, STORY_FONT); font = bios.unpack(log1, f[1] - B)[0]
@@ -112,7 +112,7 @@ def picker_art(log1, bf, name):
     for y in range(1, H - 1): tile(0, y, T_SIDE); tile(W - 1, y, T_SIDE, 1)
     for y in range(1, H - 1):
         for x in range(1, W - 1): tile(x, y, T_FILL)
-    for row, text in ((1, 'Instant Transmission'), (2, '< %s >' % name)):
+    for row, text in ((1, title), (2, '< %s >' % name)):
         x0 = 1 + (W - 2 - len(text)) // 2
         for i, ch in enumerate(text):
             if ch != ' ': tile(x0 + i, row, ord(ch) - 30, over=True)

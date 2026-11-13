@@ -35,7 +35,7 @@ def npcs():
     b = rd(0x03001C4C, 0x80); out = []; me = player()
     for i in range(31):
         p = struct.unpack_from('<I', b, 4 + 4 * i)[0]
-        if 0x02000000 <= p < 0x02040000 and p != me:
+        if 0x02000000 <= p < 0x02040000 and p != me and struct.unpack('<I', rd(p + 0x14, 4))[0] == 0x03001B0C:     # characters only, not effects
             x, y = [v >> 8 for v in struct.unpack('<2i', rd(p + 0x1A0, 8))]
             if 0 < x < 4096 and 0 < y < 4096: out.append((x, y))
     return out
@@ -91,9 +91,9 @@ holo = [q for q in npcs() if q != (120, 112)]; check('three holograms of Goku', 
 b = rd(0x03001C4C, 0x80); me = player(); L = []
 for i in range(31):
     p = struct.unpack_from('<I', b, 4 + 4 * i)[0]
-    if 0x02000000 <= p < 0x02040000 and p != me: L += w32(p + 0x28C, 1)
+    if 0x02000000 <= p < 0x02040000 and p != me and struct.unpack('<I', rd(p + 0x14, 4))[0] == 0x03001B0C: L += w32(p + 0x28C, 1)
 run(L + ['20'], 'weak')
-for k in range(4):
+for k in range(6):
     left = [q for q in npcs() if q != (120, 112)]
     if not left: break
     x, y = near(pos(), left); run(place(x, y + 20, 1) + ['2 A', '15', '2 A', '15', '2 A', '60'], 'hit%d' % k)

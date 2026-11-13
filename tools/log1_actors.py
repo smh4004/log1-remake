@@ -70,8 +70,8 @@ class Actors:
         """An NPC actor showing LoG1 pickup i in every direction and frame."""
         key = ('pickup', i)
         if key in self.ids: return self.ids[key]
-        import log1_pickups
-        img = log1_pickups.frame(self.log1, self.r, i); tp = self.table[T_NPC] - BB; n = struct.unpack_from('<I', self.r, tp)[0] & 0xFF; R = bytearray(self.r[tp:tp + 0x54 + 4 * n]); struct.pack_into('<I', R, 0x50, 0)
+        import log1_pickups, log1_dragonballs
+        img = log1_dragonballs.ball_image(self.r, i[1]) if isinstance(i, tuple) else log1_pickups.frame(self.log1, self.r, i); tp = self.table[T_NPC] - BB; n = struct.unpack_from('<I', self.r, tp)[0] & 0xFF; R = bytearray(self.r[tp:tp + 0x54 + 4 * n]); struct.pack_into('<I', R, 0x50, 0)
         for k in range(n):
             a = struct.unpack_from('<I', R, 0x54 + 4 * k)[0]
             if a >> 24 != 8: continue

@@ -71,7 +71,7 @@ for k in range(3):
     b = [p for p in npcs() if p != elder]; s = min(b, key=lambda p: abs(p[0] - Y.STUDENTS[k]['b'][0]) + abs(p[1] - Y.STUDENTS[k]['b'][1]))
     talk(*s, 'b%d' % k); check('apprentice %d caught' % (k + 1), flag(Y.CAUGHT + k) == 1)
 run(['30'], 'caught'); check('caught apprentices leave', len(npcs()) == 1, npcs())
-talk(*elder, 'taught'); run(['2 A', '30'] * 4 + ['300'], 'taught2')
+talk(*elder, 'taught'); run(['2 A', '30'] * 12 + ['300'], 'taught2')      # the lesson's EXP can level Goku up more than once
 check('the Elder teaches Instant Transmission', flag(Y.LEARNED) == 1 and 14 in skills(), skills())
 run(w8(SEL, skills().index(14)) + ['4', '3 B', '20', 'shot picker'], 'pick')
 check('the picker opens', rd(0x03005F30, 1)[0] == 1)
