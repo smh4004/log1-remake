@@ -196,7 +196,8 @@ for k, f in enumerate(M.FILMS):
             for r_ in range(10): L += w32(0x03001574, 999 << 16) + ['120']
             run(L + ['shot slug_whistle'], 'whistle'); text_done('whistle')
             check('Gohan\'s whistle after giant Slug\'s third attack', flag(M.WHISTLE_DONE) == 1, flag(M.WHISTLE_DONE))
-        ok = beat('b%s' % tag, until=ph['kills'][0]); text_done('b%s' % tag, safe=approach(f)[:2]); run(['60'], 'b%s' % tag)
+        last = i == len(f['phases']) - 1                                # the ending can take Goku elsewhere (the vision wakes him at the Crash Site)
+        ok = beat('b%s' % tag, until=ph['kills'][0]); text_done('b%s' % tag, safe=None if last else approach(f)[:2]); run(['60'], 'b%s' % tag)
         check('%s falls' % s['name'], ok and flag(ph['kills'][0]) == 1 and (not ('big' in s) or big() == 0), (ok, flag(ph['kills'][0]), hex(big())))
     run(['60'], 'won%d' % k); text_done('won%d' % k); run(['300'] + (place(*approach(f)[:3]) if 'end_effects' not in f or f['key'] != 'bardock' else []) + ['30'], 'won%d' % k)
     if f['key'] == 'bardock': check('Goku wakes at the Crash Site, himself again', rec(0)['form'] == 0 and area_no() == 9, (rec(0), area_no()))     # off the spot the test punched from, which can be inside a tree
