@@ -12,7 +12,7 @@ IDS = [int(v) for v in os.environ['IDS'].split(',')] if os.environ.get('IDS') el
 
 
 def main():
-    DEPS = sys.argv[1]; L = log1_split.build(os.path.join(DEPS, 'log1-decomp')); log1_yardrat.add_area(L); bf = os.path.join(ROOT, 'rom', 'bf.gba'); O = os.path.join(ROOT, 'out', 'slice'); os.makedirs(os.path.join(O, 'text'), exist_ok=True)
+    DEPS = sys.argv[1]; L = log1_split.build(os.path.join(DEPS, 'log1-decomp')); log1_yardrat.add_area(L); __import__('log1_bardock').add_area(L); bf = os.path.join(ROOT, 'rom', 'bf.gba'); O = os.path.join(ROOT, 'out', 'slice'); os.makedirs(os.path.join(O, 'text'), exist_ok=True)
     conv = os.path.join(ROOT, 'out', 'converted', 'scenes.json')
     if not os.path.exists(conv): subprocess.check_call([sys.executable, os.path.join(ROOT, 'tools', 'log1_scenes.py')])
     base = bytearray(open(bf, 'rb').read()); plan = log1_portraits.plan(L, os.path.join(DEPS, 'buusfury-decomp'), base)

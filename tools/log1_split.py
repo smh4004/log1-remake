@@ -17,9 +17,10 @@ PIC_FIRST, PICS, PIC_TABLE = 54, 15, 0x5C2198                          # LoG1's 
 
 
 YARDRAT = 69                                                           # tools/log1_yardrat.py: a post-game area after the pictures
+VISION = 70                                                            # tools/log1_bardock.py: Planet Vegeta, in Bardock's vision (post-game)
 
 
-def ids(): return ALL + [FIRST + k for k in range(12)] + [PIC_FIRST + k for k in range(PICS)] + [YARDRAT]
+def ids(): return ALL + [FIRST + k for k in range(12)] + [PIC_FIRST + k for k in range(PICS)] + [YARDRAT, VISION]
 
 
 def add_pictures(L, out):

@@ -112,9 +112,9 @@ def beat(tag, rounds=10, only=None, until=None):
         run(w32(p + 0x28C, 1) + place(x, y + 20, 1) + ['2 A', '15', '2 A', '15', '2 A', '60'] + ['2 A', '30'] * 4 + ['60'], tag)
     return not [q for q in near(foes()) if only is None or q[3] in only]
 def go(area, tag): run(['2 B', '30'] * 4 + w32(0x0300617C, LISTS[str(area)]) + ['300'] + ['2 A', '30'] * 10 + ['2 B', '30'] * 4 + ['100'], tag)
-def approach(f):
-    """A short clear walk into the arena from just outside one of its edges, nearest the middle of that edge: (x, y, facing, key)."""
-    (cx, cy), (x0, y0, x1, y1), a = f['centre'], M.arena(f), area_map(f['area'])
+def approach(f, rect=None, area=None):
+    """A short clear walk into the arena (or rect) from just outside one of its edges, nearest the middle of that edge: (x, y, facing, key)."""
+    (x0, y0, x1, y1) = rect or M.arena(f); a = area_map(area if area is not None else f['area']); cx, cy = (x0 + x1) // 2, (y0 + y1) // 2
     best = []
     for t in range(-90, 91, 4):
         for sx, sy, d, key, ix, iy in ((cx + t, y1 + 12, 1, 'UP', 0, -1), (cx + t, y0 - 20, 0, 'DOWN', 0, 1), (x0 - 24, cy + t, 3, 'RIGHT', 1, 0), (x1 + 12, cy + t, 2, 'LEFT', -1, 0)):
@@ -126,9 +126,13 @@ def enter(f, tag):
     x, y, d, key = approach(f)
     go(f['area'], tag); run(place(x, y, d) + ['10', '40 ' + key, '30'] + ['2 A', '30'] * 26 + ['200'], tag)
 def lead(f, tag):
-    """Into the lead-in's area and a few steps about, then through its lines."""
+    """Into the lead-in's area and a few steps about (or into its rect), then through its lines."""
+    if 'lead_rect' in f:
+        x, y, d, key = approach(f, f['lead_rect'], f['lead_area'])
+        go(f['lead_area'], tag); run(place(x, y, d) + ['10', '40 ' + key, '60'], tag); text_done(tag); run(['200'], tag); text_done(tag); return
     go(f['lead_area'], tag); moves(); run(['20 LEFT', '20 RIGHT', '30'] + ['2 A', '30'] * 16 + ['200'], tag)
 def stats(): return list(rd(REC + 0x28, 3))
+def area_no(): return rd(struct.unpack('<I', rd(0x03001980, 4))[0] + 1, 1)[0] - 1
 def text_done(tag, tries=40):
     """Through any open text: A only while Goku can't take a step (a strong Goku's stray punches would beat the next phase)."""
     for i in range(tries):
@@ -155,14 +159,18 @@ enter(F0, 'early'); check('no Cooler before the ending', not flag(F0['met']) and
 cur[0] = 'new'; run(setf(M.POSTGAME) + ['w8 %08x e7' % (REC + 0x18), 'w8 %08x 03' % (REC + 0x19)] + w32(0x03001574, 999 << 16) + ['w8 %08x c8' % (REC + 0x28 + i) for i in range(3)], 'post')   # a post-game Goku: 999 HP, strong
 enter(F0, 'nolead'); check('no Cooler before Chi-Chi tells Goku where Gohan went', not flag(F0['met']) and not near(foes()), near(foes()))
 for k, f in enumerate(M.FILMS):
+    if os.environ.get('ONLY') and f['key'] != os.environ['ONLY']: continue                 # ONLY=bardock: one film (one with no film before it)
     villain = f['phases'][-1]['foes'][0]['name']
-    if k:
+    if k and f['gate']:
         cur[0] = 'post'; lead(f, 'gl%d' % k)
         check('%s\'s lead-in waits until %s is beaten' % (villain, M.FILMS[k - 1]['phases'][-1]['foes'][0]['name']), not flag(f['lead']), flag(f['lead']))
         cur[0] = 'won%d' % (k - 1)
     else: cur[0] = 'post'
+    s0 = stats(); sz0 = senzu()
     lead(f, 'lead%d' % k); check('%s\'s lead-in plays in area %d' % (villain, f['lead_area']), flag(f['lead']) == 1)
-    s0 = stats(); sz0 = senzu(); enter(f, 'land%d' % k)
+    if 'lead_effects' in f:                                                  # the vision: the lead-in takes Goku there, and he lands in it
+        cur[0] = 'lead%d' % k; run(['20'], 'land%d' % k); check('Goku is Bardock on Planet Vegeta', rec(0)['form'] == 60, rec(0))
+    else: enter(f, 'land%d' % k)
     check('%s arrives as Goku walks into his arena' % villain, flag(f['met']) == 1)
     if f.get('arrive_effects'): check('the sky over the Earth goes dark', flag(M.SKY_DARK) == 1)
     run(place(f['centre'][0], f['centre'][1] + 50) + ['60', 'shot %s_crew' % f['key']], 'land%d' % k)
@@ -189,12 +197,14 @@ for k, f in enumerate(M.FILMS):
             check('Gohan\'s whistle after giant Slug\'s third attack', flag(M.WHISTLE_DONE) == 1, flag(M.WHISTLE_DONE))
         ok = beat('b%s' % tag, until=ph['kills'][0]); text_done('b%s' % tag); run(['60'], 'b%s' % tag)
         check('%s falls' % s['name'], ok and flag(ph['kills'][0]) == 1 and (not ('big' in s) or big() == 0), (ok, flag(ph['kills'][0]), hex(big())))
-    run(['60'], 'won%d' % k); text_done('won%d' % k); run(['300'] + place(*approach(f)[:3]) + ['30'], 'won%d' % k)     # off the spot the test punched from, which can be inside a tree
+    run(['60'], 'won%d' % k); text_done('won%d' % k); run(['300'] + (place(*approach(f)[:3]) if 'end_effects' not in f or f['key'] != 'bardock' else []) + ['30'], 'won%d' % k)
+    if f['key'] == 'bardock': check('Goku wakes at the Crash Site, himself again', rec(0)['form'] == 0 and area_no() == 9, (rec(0), area_no()))     # off the spot the test punched from, which can be inside a tree
     check('%s beaten: his reward, once, and Goku free to go' % villain, moves() and flag(f['paid']) == 1, flag(f['paid']))
     if f['reward'].get('fruit'): check('the fruit of the Tree of Might: +5 to each stat', all(b >= min(255, a + 5) for a, b in zip(s0, stats())), (s0, stats()))
     if f.get('arrive_effects'): check('and the sky clears', flag(M.SKY_DARK) == 0)
     go(5 if f['area'] != 5 else 2, 'away%d' % k); go(f['area'], 'back%d' % k); run(place(*f['centre']) + ['100'], 'back%d' % k)
     check('%s\'s arena is quiet afterwards' % villain, not near(foes()) and player() >> 24 == 2, near(foes()))
-    check('and its animals come back', len(wildlife()) > 0 or f['area'] == 23, wildlife())
+    check('and its animals come back', len(wildlife()) > 0 or f['area'] in (23, M.VISION), wildlife())
+
 print('%d failed' % len(fails) if fails else 'all passed')
 sys.exit(1 if fails else 0)

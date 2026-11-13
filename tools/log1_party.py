@@ -38,11 +38,17 @@ FIGURES = {
     # LoG2's Krillin (bald, Turtle School gi, as in LoG1) has animations 0-6 and 12 (flying): the rest borrow the nearest
     'krillin': dict(template=157, log2='r73', colours={}, overrides={5: 6, 6: 6, 14: 5, 15: 12, 18: 5, 22: 4, 23: 6}),
 }
+# Bardock (his vision, post-game: tools/log1_bardock.py): LoG2 Vegeta's armoured animations with LoG2 Goku's head, in Bardock's colours. A form of
+# Goku's own record, which src/skills.c puts on while Goku is on Planet Vegeta (area 70).
+def _bardock_spec():
+    import log1_bardock
+    return dict(template=270, log2=log1_bardock.VEGETA, colours=log1_bardock.COLOURS, conv=log1_bardock.bardock_anim)
 # form rows: copy = Buu's Fury's row used as the template, owner = character record
 ROWS = [dict(id='vegeta', copy=26, figure='vegeta', owner=4, up='vegeta_ss', portrait='vegeta1'),
         dict(id='vegeta_ss', copy=28, figure='vegeta_ss', owner=4, down='vegeta', portrait='vegeta1'),
         dict(id='piccolo', copy=49, figure='piccolo', owner=1, flags=0x10, portrait='piccolo'),
-        dict(id='krillin', copy=48, figure='krillin', owner=2, flags=0x10, portrait='krillin1')]          # Buu's Fury's guest Piccolo row; 0x10: earns EXP
+        dict(id='krillin', copy=48, figure='krillin', owner=2, flags=0x10, portrait='krillin1'),          # Buu's Fury's guest Piccolo row; 0x10: earns EXP
+        dict(id='bardock', copy=0, figure='bardock', owner=0)]                                               # a form of Goku's: his base row
 PORTRAITS = {}                                       # LoG1 speaker -> portrait (speaker id), set by slice_build from log1_portraits
 # moves on joining (src/skills.c party_join): Energy Blast first, as everyone in Buu's Fury. Vegeta: Galick Gun and Big Bang (the owner, Nov 9),
 # and Super Saiyan from the gravity room. Piccolo: his LoG2 moves, Scatter Shot (new: five Energy Blasts fanned out), Energy Punch and the Special Beam Cannon.
@@ -51,6 +57,7 @@ VEGETA, PICCOLO, KRILLIN = 4, 1, 2                                          # th
 SKILLS = {VEGETA: (7, 26, 2), PICCOLO: (7, 29, 8, 27), KRILLIN: (7, 28, 15, 25)}      # Krillin: Destructo Disc, Kamehameha, Solar Flare
 LEAN = {VEGETA: (110, 115, 100), PICCOLO: (100, 105, 115), KRILLIN: (95, 100, 95)}       # strength, power, endurance against the player's
 FIRST_FORM = 54 + 2                                                          # Buu's Fury's 54, the two Kaioken rows (build_skills.KAIOKEN), then ROWS
+BARDOCK_FORM = FIRST_FORM + [r_['id'] for r_ in ROWS].index('bardock')      # src/skills.c BARDOCK_FORM
 JOIN = 232                                                                   # native party_join(character, form)
 ADD_SKILL = 164                                                              # native: add a skill (character, skill)
 QF, POSTGAME = 420, 420 + 68
@@ -102,7 +109,7 @@ def figure(act, l2, spec, lengths):
         old = u32(rec, 0x54 + 4 * slot); want = u32(r, old - B) if old else 0
         k, sl = (str(k).split('@') + [None])[:2]
         sl = slice(*map(int, sl.split(':'))) if sl else None
-        p = sprites.log2_anim(act.ins, l2, src, int(k), cmap, cache, want, sl)
+        p = (spec.get('conv') or sprites.log2_anim)(act.ins, l2, src, int(k), cmap, cache, want, sl)
         if p: struct.pack_into('<I', rec, 0x54 + 4 * slot, p)
     for slot, want in lengths.items():                  # at least as long as a retail player's
         if slot >= 24: continue
@@ -119,7 +126,9 @@ def figure(act, l2, spec, lengths):
 
 def actors(act):
     l2 = open(COMBO, 'rb').read()[0x800000:]; lengths = player_lengths(act.r, act.table)
-    return {name: figure(act, l2, spec, lengths) for name, spec in FIGURES.items()}
+    out = {name: figure(act, l2, spec, lengths) for name, spec in FIGURES.items()}
+    out['bardock'] = figure(act, l2, _bardock_spec(), lengths)
+    return out
 
 
 def form_rows(rows, first, figs):

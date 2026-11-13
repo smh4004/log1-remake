@@ -190,7 +190,7 @@ static const s8 DX[4] = {0, 0, -1, 1}, DY[4] = {1, -1, 0, 0};
 
 /* attacks: each runs over BS.t frames; returns 1 when done */
 enum { A_EYE, A_FLASH, A_NOVA, A_RING, A_CALAMITY, A_METEOR, A_FINGER, A_SLUG_EYE, A_TWIN, A_SMASHER, A_MOUTH, A_STOMP };
-static const u8 MOVES[7][4] = {
+static const u8 MOVES[8][4] = {
     {A_EYE, A_FLASH, A_EYE, A_FLASH},            /* Cooler */
     {A_FLASH, A_EYE, A_NOVA, A_FLASH},           /* Cooler, final form */
     {A_RING, A_CALAMITY, A_RING, A_CALAMITY},    /* Turles */
@@ -198,8 +198,9 @@ static const u8 MOVES[7][4] = {
     {A_FINGER, A_SLUG_EYE, A_TWIN, A_FINGER},    /* Lord Slug */
     {A_SMASHER, A_SLUG_EYE, A_TWIN, A_FINGER},   /* Lord Slug, giant */
     {A_MOUTH, A_STOMP, A_MOUTH, A_STOMP},        /* Gohan as a Great Ape */
+    {A_MOUTH, A_METEOR, A_MOUTH, A_FLASH},       /* Dodoria, in Bardock's vision */
 };
-static const u8 COOLDOWN[7] = {100, 80, 105, 80, 105, 85, 95};
+static const u8 COOLDOWN[8] = {100, 80, 105, 80, 105, 85, 95, 90};
 
 static void beam_seg(int part, int d, int x, int y, int speed, int side, int power, int burst) {
     shoot(part, d, x + DY[d] * side, y + DX[d] * side, DX[d] * speed * 16, DY[d] * speed * 16, 34, power, burst, 0);

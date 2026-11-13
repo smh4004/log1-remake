@@ -397,7 +397,7 @@ class Story:
             spot = next(((t['to_x'], t['to_y']) for m in self.areas.values() for t in m['triggers'] if t['kind'] == 'warp' and t['to_area'] == n), None)
             if not spot: spot = next(((b['x'], b['y']) for x in self.q for b in x['actions'] if b['type'] == 'warp' and b['area'] == n), None)
             if not spot: spot = next(((b['to_x'], b['to_y']) for x in self.q for b in x['actions'] if b['type'] == 'add_warp' and b['to_area'] == n), None)
-            if not spot and n == log1_yardrat.AREA: spot = tuple(a['start'])
+            if not spot and n in (log1_yardrat.AREA, 70): spot = tuple(a['start'])
             if not spot: spot = next(((t['x'] - 20, t['y']) for t in a['actors']), (64, 64))
             r += ['list dbg_%d' % n, 'set_flag %d' % NOOP] + self.warp(n, *spot) + ['stop']
             if self.bal: r += ['list dbgx_%d' % n, 'set_flag %d' % NOOP, 'do call 194 %d' % self.bal.exp[self.bal_level(n) + 1], 'stop']

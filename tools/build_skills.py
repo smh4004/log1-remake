@@ -147,7 +147,7 @@ def compile_code(at):
     d = tempfile.mkdtemp(); c, o, e, b, ld = (os.path.join(d, n) for n in ('s.c', 's.o', 's.elf', 's.bin', 's.ld'))
     open(ld, 'w').write('SECTIONS { . = 0x%X; .text : { *(.text*) *(.rodata*) } .data : { *(.data*) *(.bss*) *(COMMON) } /DISCARD/ : { *(.comment) *(.ARM.attributes) } }\n' % (B + at))
     defs = ['-DSS_SKILL=%d' % SS_SKILL, '-DIT_SKILL=%d' % IT_SKILL, '-DKAME_SKILL=%d' % KAME_SKILL, '-DKAIOKEN_SKILL=%d' % KAIOKEN_SKILL, '-DSPIRIT_SKILL=%d' % SPIRIT_SKILL, '-DSOLAR_SKILL=%d' % SOLAR_SKILL, '-DYARDRAT_FLAG=%d' % YARDRAT_FLAG, '-DSPIRIT_FLAG=%d' % SPIRIT_FLAG,
-            '-DMASTERY_L2=%d' % MASTERY_L2, '-DAS_VEGETA=%d' % __import__('log1_party').AS_VEGETA, *['-D%s=%d' % kv for kv in __import__('log1_dragonballs').C_FLAGS.items()], '-DMASTERY_L3=%d' % MASTERY_L3]
+            '-DMASTERY_L2=%d' % MASTERY_L2, '-DAS_VEGETA=%d' % __import__('log1_party').AS_VEGETA, '-DBARDOCK_FORM=%d' % __import__('log1_party').BARDOCK_FORM, '-DBARDOCK_MAP=%d' % (__import__('log1_bardock').VISION + 1), *['-D%s=%d' % kv for kv in __import__('log1_dragonballs').C_FLAGS.items()], '-DMASTERY_L3=%d' % MASTERY_L3]
     o2 = os.path.join(d, 'b.o')                                              # src/bosses.c: the movie villains' attacks, linked in beside
     subprocess.check_call(['arm-none-eabi-gcc', '-mthumb', '-mcpu=arm7tdmi', '-Os', '-ffreestanding', '-fno-builtin', '-nostdlib', '-fshort-wchar', *defs, '-c', os.path.join(ROOT, 'src', 'skills.c'), '-o', o])
     import log1_movies

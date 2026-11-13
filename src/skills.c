@@ -403,6 +403,14 @@ static void dragon_balls(void) {
 }
 
 void bosses_tick(void);
+/* Bardock's vision (tools/log1_bardock.py): on Planet Vegeta (area 70) Goku is Bardock, a form of his own record; anywhere else he is himself again. */
+static void bardock_tick(void) {
+    u8 *rec = rec_of(0), *me = PLAYER_OBJ;
+    int in = AREA && *(u8 *)AREA == 26 && *(u8 *)(AREA + 1) == BARDOCK_MAP;
+    if (CUR != 0 || !me) return;
+    if (in && rec[0x14] != BARDOCK_FORM) { rec[0x14] = BARDOCK_FORM; Sprite_SetCharacter(me, Form_Sprite(form_table + BARDOCK_FORM * 24)); }
+    else if (!in && rec[0x14] == BARDOCK_FORM) { rec[0x14] = 0; Sprite_SetCharacter(me, Form_Sprite(form_table)); }
+}
 u16 *player_input(void) {
     u16 *keys = ((u16 *(*)(void))0x0804F8C9)();
     u8 *rec = rec_of(CUR);
@@ -413,6 +421,7 @@ u16 *player_input(void) {
     dragon_balls();
     rec_of(0)[0] |= 1;      /* Goku is in the party: the pause menu lists party members (record +0 bit 0) and, with none, reads a stale entry and crashes */
     if (CUR == 0 && (FRAMES & 63) == 0) skills_sync();
+    bardock_tick();
     bosses_tick();                                     /* the movie villains' attacks (src/bosses.c) */
     if (!(keys[1] & 0x200) || FLYING || (AREA && *(u16 *)AREA == (0 | 50 << 8))) return keys;
     d = keys[2] & 0xF0;

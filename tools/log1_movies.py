@@ -23,6 +23,9 @@ Each film is a lead-in somewhere else, then a chain of fights in its arena with 
     Lord Slug: the City's news of a runaway planet -> the Battlegrounds: Slug young again by the Dragon Balls, the sky blacked out over all
         Earth (src/flight.c's dimming, until he falls), his soldiers -> Slug -> his giant Namekian form; Gohan's whistle stuns him mid-fight
         (src/bosses.c asks for it) -> the Kaioken and a Spirit Bomb into his freezing machine.
+    Bardock's vision (any time after the ending): Raditz's pod at the Crash Site pulls Goku into a dream of his father's last stand. On Planet
+        Vegeta (tools/log1_bardock.py: area 70; src/skills.c makes Goku Bardock there) Frieza's soldiers, then Dodoria; then Frieza's Supernova,
+        Bardock's vision of Kakarot, and Goku wakes by the pod. It plays again until it has been seen through.
 Each villain's first form opens after the ending (and after the film before), far above anything in the story (stage 41 plus more, rising).
 While a villain is there the area's own animals near the arena keep away (src/flight.c sends off a living one whose "flag clear" condition on
 a movie flag, 1000 and up, stops holding). All text here is original.
@@ -79,6 +82,7 @@ def soldier(name, sprite, look, light, dark): return dict(name=name, sprite=spri
 COOLER2_TINT = {2: (190, 150, 255), 3: (110, 60, 210), 4: (50, 20, 120), 5: (200, 206, 222), 6: (160, 166, 190), 7: (120, 126, 156), 8: (84, 88, 118), 9: (56, 58, 84)}
 SKY_DARK = 950                                              # src/flight.c dims the screen while it is set: Slug's cloud over the Earth
 SENZU = 11
+VISION, FLASH = 70, 898                                     # tools/log1_bardock.py's Planet Vegeta; src/flight.c's white flash
 
 FILMS = [
     dict(key='cooler', area=4, centre=(500, 384), gate=None, met=413, here=1016, lead=1017, paid=418, exp=3,
@@ -171,6 +175,36 @@ FILMS = [
          end_effects=['do call 30 %d' % SKY_DARK],
          reward=dict(gear=139, text="Goku found Slug's Pure Black Cape in the wreckage!"),
          hint=None),
+    # Bardock's vision (post-game, any time after the ending): Raditz's pod at the Crash Site pulls Goku into a dream of his father's last stand on
+    # Planet Vegeta (tools/log1_bardock.py: area 70, and his figure; src/skills.c makes Goku Bardock there). It plays again until it is seen through.
+    dict(key='bardock', area=VISION, centre=(352, 470), gate=None, met=951, here=952, lead=953, paid=954, exp=2, replay=True,
+         lead_area=9, lead_rect=(296, 96, 424, 208),
+         lead_text=[('narrator', "Raditz's pod still lies in its crater, cracked and cold. Inside it, a scouter blinks on by itself."),
+                    ('goku', "Raditz said our father was a Saiyan warrior... I wonder what he was like."),
+                    ('narrator', "Goku picks up the scouter. Static roars in his head, then a voice that sounds just like his own...")],
+         lead_effects=lambda st: ['set_flag %d' % FLASH] + st.warp(VISION, 352, 500),        # clear of the map's foot, where the screen shows past it
+         arrive=[('narrator', "Planet Vegeta, long ago. A low-class Saiyan warrior named Bardock has seen the future in his dreams: Frieza is "
+                  "coming to wipe out his people."),
+                 ('bardock', "Nobody believed me. Fine. Then I'll stop Frieza myself!")],
+         attack="Frieza's soldiers pour out of their pods!",
+         phases=[phase('crew', [dict(name='a soldier', sprite='hench1', look='fsoldier1', extra=6),
+                                dict(name='a soldier', sprite='hench3', look='fsoldier2', extra=6),
+                                dict(name='a soldier', sprite='hench5', look='fsoldier3', extra=6)], [955, 956, 957], 951),
+                 phase('one', [dict(name='Dodoria', sprite='recoome', look='dodoria', tint=squad_tint((255, 168, 200), (150, 60, 100)), moveset=7, extra=10)],
+                       [1020], 1021,
+                       [('dodoria', "Well, well. The monkey who thinks he can see the future. Let's see you see this coming!"),
+                        ('bardock', "Dodoria! You were at Planet Meat. You killed my whole team!")])],
+         ending=[('narrator', "Bardock flies up through a sky full of soldiers to Frieza's ship. Frieza floats out to meet him, smiling."),
+                 ('bardock', "Frieza! This is for all of us! Take this!"),
+                 ('narrator', "Bardock throws everything he has left: a Final Spirit Cannon. Frieza raises one finger. A sun grows on it, the "
+                  "Supernova, and it swallows the blast, Bardock, and Planet Vegeta whole."),
+                 ('narrator', "In the last light Bardock sees one more vision: a grown son with his face, standing up to Frieza on a world far away."),
+                 ('bardock', "Kakarot... it's up to you now...")],
+         end_effects=lambda st: ['set_flag %d' % FLASH] + st.warp(9, 352, 220),
+         after=[('narrator', "Goku wakes at the edge of the crater, the scouter dark in his hand."),
+                ('goku', "Dad... I never even knew your name. Bardock. I'll remember it.")],
+         reward=dict(gear=40, text="Inside Raditz's pod Goku found a spare suit of Saiyan Armor, like his father wore."),
+         hint=None),
 ]
 BY_KEY = {f['key']: f for f in FILMS}
 WHISTLE, WHISTLE_DONE = 948, 949                            # src/bosses.c sets WHISTLE once the giant has thrown three attacks; src/flight.c runs mv_whistle
@@ -217,13 +251,13 @@ def lists(st):
     for f in FILMS:
         k = f['key']
         # the lead-in, anywhere in its area, once
-        o += ['list mv_%s_lead' % k, 'set_flag %d' % NOOP, 'unless_flag %d mv_%s_le' % (POSTGAME, k), 'if_flag %d mv_%s_le' % (f['lead'], k)]
+        o += ['list mv_%s_lead' % k, 'set_flag %d' % NOOP, 'unless_flag %d mv_%s_le' % (POSTGAME, k), 'if_flag %d mv_%s_le' % (f['paid'] if f.get('replay') else f['lead'], k)]
         if f['gate']: o.append('unless_flag %d mv_%s_le' % (BY_KEY[f['gate']]['paid'], k))
-        o += say(st, f['lead_text']) + ['set_flag %d' % f['lead'], 'label mv_%s_le' % k, 'stop']
+        o += say(st, f['lead_text']) + ['set_flag %d' % f['lead']] + (f['lead_effects'](st) if 'lead_effects' in f else []) + ['label mv_%s_le' % k, 'stop']
         # the arena
         o += ['list mv_' + k, 'set_flag %d' % NOOP, 'unless_flag %d mv_%s_end' % (f['lead'], k), 'if_flag %d mv_%s_end' % (f['met'], k)]
         o += say(st, f['arrive']) + f.get('arrive_effects', []) + ['set_flag %d' % f['met'], 'set_flag %d' % f['here']]
-        o += narrate("The %s's animals bolt. %s attacks!" % ({4: 'Forest', 16: 'Wilderness', 23: 'Battlegrounds'}[f['area']],
+        o += narrate(f.get('attack') or "The %s's animals bolt. %s attacks!" % ({4: 'Forest', 16: 'Wilderness', 23: 'Battlegrounds'}[f['area']],
                                                              ' and '.join(x['name'] for x in f['phases'][0]['foes'][:2]) + ' and ' + f['phases'][0]['foes'][2]['name']))
         o += ['label mv_%s_end' % k, 'stop']
     s = BY_KEY['slug']
@@ -249,7 +283,8 @@ def checks(st):
             o += say(st, ph['intro']) + ph['effects'] + ['label ' + lab]
         last = f['phases'][-1]; lab = 'mv_%s_won' % k
         o += ['if_flag %d %s' % (f['paid'], lab)] + ['unless_flag %d %s' % (fl, lab) for fl in last['kills']]
-        o += ['set_flag %d' % f['paid'], 'do call 30 %d' % f['here']] + say(st, f['ending']) + f.get('end_effects', [])
+        ef = f.get('end_effects', []); ef = ef(st) if callable(ef) else ef
+        o += ['set_flag %d' % f['paid'], 'do call 30 %d' % f['here']] + say(st, f['ending']) + ef + say(st, f.get('after', []))
         o += ['do call 194 %d' % (st.bal.quest_exp(41, True) * f['exp'])]
         if R.get('fruit'): o += ['set_flag %d' % DB_POWER] + narrate("Goku ate the fruit of the Tree of Might! His strength, power and endurance rose.")
         o += ['do call 147 %d' % R['gear']] + narrate(R['text']) + (narrate(f['hint']) if f['hint'] else []) + ['label ' + lab]
@@ -277,7 +312,7 @@ def big_data(actors, s):
 
 def install(n, a, fits, r, actors, put, named, spawns, foe, walkins, BF_IDX):
     for f in FILMS:
-        if n == f['lead_area']: walkins.append((n, 0, 0, a.W * 8, a.H * 8, named['mv_%s_lead' % f['key']]))      # anywhere in the area
+        if n == f['lead_area']: walkins.append((n,) + f.get('lead_rect', (0, 0, a.W * 8, a.H * 8)) + (named['mv_%s_lead' % f['key']],))      # anywhere in the area, or its rect
         if n != f['area']: continue
         walkins.append((n,) + arena(f) + (named['mv_' + f['key']],))       # walking into the arena
         for ph in f['phases']:

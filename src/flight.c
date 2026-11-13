@@ -291,6 +291,7 @@ void flight_draw(int list) {
 #define PIC_BACK 897
 #define PIC_FIRST 55                                                   /* the first picture's area number */
 #define PIC_END 70                                                     /* past the last (Yardrat, 70, is a real area) */
+#define VISION_MAP 71                                                  /* Planet Vegeta, area 70: Bardock's vision (tools/log1_bardock.py) */
 #define PX (*(volatile int *)0x03005F18)
 #define PY (*(volatile int *)0x03005F1C)
 #define DISPCNT (*(volatile u16 *)0x04000000)
@@ -362,7 +363,7 @@ static u32 live_save(u32 k) {
     if (k & 0x200) k &= ~4;                    /* L + SELECT is ours: Buu's Fury would open its scouter */
     if (!pressed || !PLAYER || !AREA || *(u8 *)AREA != WORLD_ID || (*(u8 *)(AREA + 1) >= PIC_FIRST && *(u8 *)(AREA + 1) < PIC_END) || STATE[1] || ZBUSY) return k;
     if (!(k & 4)) {                            /* L held: switch characters, once someone has joined */
-        if (switch_ptr && party_size() > 1) SWITCH_WAIT = 1;
+        if (switch_ptr && party_size() > 1 && *(u8 *)(AREA + 1) != VISION_MAP) SWITCH_WAIT = 1;      /* in Bardock's vision Goku is Bardock alone */
         return k;
     }
     int at[2] = {*(int *)(PLAYER + 0x1A0) >> 8, *(int *)(PLAYER + 0x1A4) >> 8};
@@ -445,6 +446,7 @@ static u32 live_it(u32 k) {
     t = (const it_t *)(PICK_ON ? PICK_TABLE : it_ptr);
     if (!t) return k;
     while (t[n].flag) n++;
+    if (IT_PENDING && AREA && *(u8 *)(AREA + 1) == VISION_MAP) IT_PENDING = 0;        /* Bardock's vision: no travelling out of a dream */
     if (IT_PENDING && !PICK_ON && PLAYER && !ZBUSY && n) {
         PICK_TABLE = it_ptr;
         IT_PENDING = 0; PICK_ON = 1; PICK_SHOWN = 0; PICK_PREV = k; PICK_IDX = 0;
