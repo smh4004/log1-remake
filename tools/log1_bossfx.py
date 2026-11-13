@@ -283,6 +283,12 @@ ATTACKS = [
          what='Two golden spheres circle him for a few seconds, then fly at Goku one after the other.'),
     dict(boss='Lord Slug (giant form)', name='Big Smasher', parts=['big_smasher', 'nova_burst'],
          what='A golden sun grows over the giant\'s head, then he throws it, churning. Very heavy damage and a wide burst.'),
+    dict(boss='Dodoria', name='Mouth Blast', key='Mouth Blast (Dodoria)', parts=['mouth_blast', 'ki_burst'],
+         what="In Bardock's vision. He opens his jaws wide and a thick blast pours out the way he faces."),
+    dict(boss='Dodoria', name='Meteor Burst', parts=['meteor_shot', 'violet_burst'],
+         what='A fan of five small blasts, one after another, spread around Bardock.'),
+    dict(boss='Dodoria', name='Death Flash', parts=['death_flash', 'ki_burst'],
+         what='Three quick bolts from his finger, straight along the way he faces.'),
 ]
 
 
