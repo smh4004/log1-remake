@@ -130,6 +130,10 @@ static int on_screen(struct proj *q) {
            *(const int *)(s + 0x24) < CAMERA[3] + 8 && *(const int *)(s + 0x2C) > CAMERA[1] - 8;
 }
 
+/* A giant's shots start at his head, which is off the top of the screen while Goku stands close below him (and a shot off the screen is removed
+   at once): they start at the screen's top edge instead. q->pad is 40 for a tall owner. */
+static void keep_in_view(struct proj *q) { int top = CAMERA[1] + 10; if ((q->y >> 4) < top) q->y = top << 4; }
+
 void proj_update(struct proj *q) {
     u8 *s = q->spark, *me = PLAYER_OBJ, *o = q->owner;
     const volatile part_t *p = &boss_parts[q->part];
@@ -144,6 +148,7 @@ void proj_update(struct proj *q) {
         int a = (q->ox + (FRAMES & 0xFFFF) / 4) & 15;
         q->x = (px_(o) + SIN16[(a + 4) & 15] * q->oy / 128) << 4; q->y = (py_(o) - q->pad + SIN16[a] * q->oy / 256) << 4;
     } else { q->x += q->vx; q->y += q->vy; }
+    if (q->mode && q->pad == 40) keep_in_view(q);
     set_box(q);
     if (q->mode == 0 && me && !q->hit) {
         int dx = (q->x >> 4) - px_(me), dy = (q->y >> 4) - (py_(me) - 12), r = 8 + q->size;
@@ -174,6 +179,7 @@ static struct proj *shoot(int part, int dir, int x, int y, int vx, int vy, int l
     *(const int **)q = proj_vt;
     q->x = x << 4; q->y = y << 4; q->vx = vx; q->vy = vy; q->part = part; q->dir = dir; q->mode = 0; q->hold = 0;
     q->life = life; q->power = power; q->owner = BS.obj; q->ox = q->oy = 0; q->burst = burst; q->hit = 0; q->size = size; q->age = 0; q->pad = B2.tall ? 40 : 14;
+    if (B2.tall) keep_in_view(q);
     set_box(q);
     ListAdd(ACTORS, q);
     return q;
