@@ -38,11 +38,11 @@ FIGURES = {
     # LoG2's Krillin (bald, Turtle School gi, as in LoG1) has animations 0-6 and 12 (flying): the rest borrow the nearest
     'krillin': dict(template=157, log2='r73', colours={}, overrides={5: 6, 6: 6, 14: 5, 15: 12, 18: 5, 22: 4, 23: 6}),
 }
-# Bardock (his vision, post-game: tools/log1_bardock.py): LoG2 Vegeta's armoured animations with LoG2 Goku's head, in Bardock's colours. A form of
+# Bardock (his vision, post-game: tools/log1_bardock.py): LoG2 Goku's own animations in Bardock's colours. A form of
 # Goku's own record, which src/skills.c puts on while Goku is on Planet Vegeta (area 70).
 def _bardock_spec():
     import log1_bardock
-    return dict(template=270, log2=log1_bardock.VEGETA, colours=log1_bardock.COLOURS, conv=log1_bardock.bardock_anim)
+    return dict(template=270, log2=log1_bardock.GOKU, colours=log1_bardock.COLOURS, conv=log1_bardock.bardock_anim)
 # form rows: copy = Buu's Fury's row used as the template, owner = character record
 ROWS = [dict(id='vegeta', copy=26, figure='vegeta', owner=4, up='vegeta_ss', portrait='vegeta1'),
         dict(id='vegeta_ss', copy=28, figure='vegeta_ss', owner=4, down='vegeta', portrait='vegeta1'),
