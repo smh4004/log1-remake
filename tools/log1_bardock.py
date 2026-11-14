@@ -109,12 +109,17 @@ def body(v, sv):
         elif i in SUIT:
             if y <= cbot and not x0 <= x <= x1: out[y, x] = ARM_SKIN[i]          # bare arms beside the chest plate
             else: out[y, x] = NAVY[SUIT.index(i)]
+    def effect(p):                                  # an attack's white swoosh: in the air (touching nothing of him but greys), or all light greys
+        return all(shade[int(v[y, x])] < 2 for y, x in p) or not any(       # (gloves and boots always have their darker outline greys)
+            0 <= y + a < h and 0 <= x + b < w and v[y + a, x + b] and not grey[y + a, x + b] for y, x in p for a, b in ((1, 0), (-1, 0), (0, 1), (0, -1)))
     hands = grey & (np.arange(h)[:, None] < boot_top)
     for y, x in in_chest: out[y, x] = GREEN[shade[int(v[y, x])]]; hands[y, x] = False
     for p in components(hands):                                                   # a long red wristband, then the bare hand
+        if effect(p): continue
         last = max(y for y, _ in p)
         for y, x in p: out[y, x] = (18 if shade[int(v[y, x])] < 2 else 20) if y >= last - 1 else BAND[0 if shade[int(v[y, x])] < 2 else 1]
     for p in components(grey & (np.arange(h)[:, None] >= boot_top)):              # boots: the legband on top
+        if effect(p): continue
         top = min(y for y, _ in p)
         for y, x in p: out[y, x] = BAND[0 if shade[int(v[y, x])] < 2 else 1] if y == top else BOOTS[min(2, shade[int(v[y, x])])]
     return out
