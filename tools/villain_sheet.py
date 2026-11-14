@@ -1,5 +1,5 @@
 """Preview sheets of the post-game villains and Bardock, read from a built ROM: one PNG each, every animation's frames facing down, up and
-to the side (the Great Ape and giant Slug as their big 32x64 figure: walking, walking, casting). Nothing here holds art; run it on your own
+to the side (the Great Ape, giant Slug and Cooler's final form as their big figure: walking, walking, casting). Nothing here holds art; run it on your own
 build.
 
     python3 tools/villain_sheet.py <rom> <out dir>
@@ -61,12 +61,13 @@ def main(rom, out):
         return rows
 
     def big_rows(big):
-        rows = []
+        """src/flight.c's big figure: 32x64, or 64x64 when the pointer's low bit is set."""
+        rows = []; w = 64 if big & 1 else 32; size = 64 * w; tw = w // 8
         for pose, what in enumerate(('walking', 'walking', 'casting')):
             ims = []
             for d in range(4):
-                o = big - BB + pose * 8192 + d * 2048; img = np.zeros((64, 32), np.uint8)
-                for t in range(32): img[(t // 4) * 8:(t // 4) * 8 + 8, (t % 4) * 8:(t % 4) * 8 + 8] = np.frombuffer(r[o + 64 * t:o + 64 * t + 64], np.uint8).reshape(8, 8)
+                o = (big & ~1) - BB + pose * 4 * size + d * size; img = np.zeros((64, w), np.uint8)
+                for t in range(size // 64): img[(t // tw) * 8:(t // tw) * 8 + 8, (t % tw) * 8:(t % tw) * 8 + 8] = np.frombuffer(r[o + 64 * t:o + 64 * t + 64], np.uint8).reshape(8, 8)
                 ims.append(img)
             rows.append((what + ': down, up, left, right', ims))
         return rows

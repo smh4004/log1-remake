@@ -372,7 +372,8 @@ static u32 live_save(u32 k) {
     return k;
 }
 
-/* A Great Ape is taller than an actor's one 32x32 piece, so its actor goes invisible and this draws it as a 32x64 sprite of its own, in the low OBJ tiles that actors don't reach. */
+/* A Great Ape is taller than an actor's one 32x32 piece, so its actor goes invisible and this draws it as a 32x64 sprite of its own, in the low OBJ tiles that actors don't reach.
+ * BIG_DATA's low bit asks for a 64x64 figure instead (Cooler's final form), its frames 4 KB apart in tiles 128-255 (marks use 100-101, the picker 256 up). */
 #define BIG_OBJ (*(volatile u32 *)0x03005F60)
 #define BIG_DATA (*(volatile u32 *)0x03005F64)
 #define BIG_SHOWN (*(volatile u32 *)0x03005F68)     /* the frames now in VRAM */
@@ -381,11 +382,15 @@ static u32 live_save(u32 k) {
 static void big_draw(void) {
     if (BIG_OBJ && !listed((void *)BIG_OBJ)) BIG_OBJ = 0;          /* gone (a movie villain's Great Ape or giant form beaten: src/bosses.c) */
     if (!BIG_OBJ) { if (BIG_SHOWN) { BIG_SHOWN = 0; OAM[127 * 4] = 0x200; } return; }
-    u32 o = BIG_OBJ, src = BIG_DATA + (*(u8 *)(o + 0x10) & 3) * 2048;
-    if (BIG_SHOWN != src) { for (int i = 0; i < 512; i++) ((volatile u32 *)0x06010000)[i] = ((const u32 *)src)[i]; BIG_SHOWN = src; }
-    int x = (*(int *)(o + 0x1A0) >> 8) - 8 - (CAM_X >> 10), y = (*(int *)(o + 0x1A4) >> 8) - 56 - (CAM_Y >> 10);
-    if (x <= -32 || x >= 240 || y <= -64 || y >= 160) { OAM[127 * 4] = 0x200; return; }
-    OAM[127 * 4] = (y & 255) | 0x2000 | 0x8000; OAM[127 * 4 + 1] = (x & 511) | 0xC000; OAM[127 * 4 + 2] = 0xC00;
+    u32 o = BIG_OBJ, wide = BIG_DATA & 1, src = (BIG_DATA & ~1u) + (*(u8 *)(o + 0x10) & 3) * (wide ? 4096 : 2048);
+    if (BIG_SHOWN != src) {
+        volatile u32 *v = (volatile u32 *)(wide ? 0x06011000 : 0x06010000);
+        for (int i = 0; i < (wide ? 1024 : 512); i++) v[i] = ((const u32 *)src)[i];
+        BIG_SHOWN = src;
+    }
+    int x = (*(int *)(o + 0x1A0) >> 8) - (wide ? 24 : 8) - (CAM_X >> 10), y = (*(int *)(o + 0x1A4) >> 8) - 56 - (CAM_Y >> 10);
+    if (x <= (wide ? -64 : -32) || x >= 240 || y <= -64 || y >= 160) { OAM[127 * 4] = 0x200; return; }
+    OAM[127 * 4] = (y & 255) | 0x2000 | (wide ? 0 : 0x8000); OAM[127 * 4 + 1] = (x & 511) | 0xC000; OAM[127 * 4 + 2] = 0xC00 | (wide ? 128 : 0);
 }
 
 /* Cutscene poses and sprite swaps: a flag from the script picks a table row {flag, actor, frames}. The actor's animation is held on those frames, set right before

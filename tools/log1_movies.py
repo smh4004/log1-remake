@@ -4,9 +4,9 @@
     checks(st)      lines for side_check, which runs after a side enemy dies
     install(...)    each area's walk-in scenes and enemies (log1_areas, beside log1_side.install)
 
-Cooler (the owner, Nov 9: "build a Cooler sprite or find one ... Cooler first"): no Buu's Fury, LoG1 or LoG2 sprite exists, so he is LoG1's
-own Frieza final form recoloured (COOLER_TINT): his purples turned to Cooler's deep blue-violet and the pinkish white body cooled to a bluish
-white, the way tools/log1_party.py recolours Vegeta. His Armored Squadron are LoG1's Frieza soldiers in their own colours.
+Cooler (tools/log1_cooler.py): his final form is LoG2's own Cooler sprite, as a 64x64 big figure; his fourth form, which LoG2 hasn't got, is
+LoG1's final-form Frieza rebuilt in that sprite's colours (purple skin, white carapace, the blue gem). His Armored Squadron are LoG1's Frieza
+soldiers in their own colours.
 
 Turles (the owner, Nov 12: "Use Goku for Turles with reskinned Saiyan armor"): LoG1 Goku's head on LoG1 Vegeta's armour (tools/log1_turles.py).
 Lord Slug: LoG1's Piccolo in Slug's black cloak, helmet and bodysuit with his orange scarf (SLUG_TINT). Their soldiers are LoG1's henchmen in
@@ -62,8 +62,6 @@ def squad_tint(light, dark):
     return f
 
 
-# LoG1 Frieza's palette index -> Cooler's colour: 2-4 the head and shoulders' purple, 5-9 the pinkish white body
-COOLER_TINT = {2: (150, 150, 240), 3: (64, 56, 168), 4: (28, 22, 88), 5: (226, 228, 240), 6: (196, 200, 222), 7: (150, 156, 190), 8: (104, 108, 146), 9: (74, 76, 110)}
 # LoG1 Piccolo's index -> Slug's: the turban becomes his dark helmet and the cape his black cloak (2, 14, 15), the turban's purple top the helmet's crown
 # (9, 10), the gi his black bodysuit (6-8), the sash his orange scarf (11)
 SLUG_TINT = {2: (92, 84, 110), 14: (40, 34, 54), 15: (64, 56, 82), 6: (44, 42, 54), 7: (28, 26, 36), 8: (12, 10, 18), 9: (52, 46, 66), 10: (34, 30, 44), 11: (206, 112, 36)}
@@ -78,8 +76,6 @@ def phase(kind, foes, kills, said, intro=(), effects=()):
 def soldier(name, sprite, look, light, dark): return dict(name=name, sprite=sprite, look=look, tint=squad_tint(light, dark))
 
 
-# LoG1 Frieza's palette -> Cooler's final form: the plates of his armour in a deeper violet, his white body hardened to steel grey
-COOLER2_TINT = {2: (190, 150, 255), 3: (110, 60, 210), 4: (50, 20, 120), 5: (200, 206, 222), 6: (160, 166, 190), 7: (120, 126, 156), 8: (84, 88, 118), 9: (56, 58, 84)}
 SKY_DARK = 950                                              # src/flight.c dims the screen while it is set: Slug's cloud over the Earth
 SENZU = 11
 VISION, FLASH = 70, 898                                     # tools/log1_bardock.py's Planet Vegeta; src/flight.c's white flash
@@ -98,11 +94,11 @@ FILMS = [
          phases=[phase('crew', [soldier('Salza', 'hench4', 'salza', (150, 200, 255), (60, 90, 190)),
                                 soldier('Dore', 'hench6', 'dore', (140, 210, 120), (40, 110, 50)),
                                 soldier('Neiz', 'hench2', 'neiz', (250, 230, 120), (170, 120, 30))], [414, 415, 416], 413),
-                 phase('one', [dict(name='Cooler', sprite='frieza4', look='cooler', tint=recolour(COOLER_TINT), moveset=0, extra=14)], [417], 419,
+                 phase('one', [dict(name='Cooler', sprite='frieza4', look='cooler', moveset=0, extra=14)], [417], 419,
                        [('cooler', "Useless, all of them. Fine. I'll show you the difference between Frieza and me."),
                         ('gohan1', "Dad! Hold on! I'll fly to Korin's Tower and bring back Senzu Beans!"),
                         ('narrator', "Gohan streaks away across the Forest. Goku, still bleeding from the eye beam, squares up to Cooler alone.")]),
-                 phase('one', [dict(name='Cooler', sprite='frieza4', look='cooler2', tint=recolour(COOLER2_TINT), moveset=1, extra=17)], [1019], 1018,
+                 phase('one', [dict(name='Cooler', sprite='frieza4', look='cooler2', moveset=1, extra=17, big=dict(final='cooler'))], [1019], 1018,
                        [('cooler', "Impressive, for a monkey. Frieza only ever had four forms. I have one more."),
                         ('narrator', "Cooler's body swells. Plates of violet armour slide over his skull and a mask snaps shut across his mouth."),
                         ('gohan1', "Dad! Catch!"),
@@ -190,7 +186,7 @@ FILMS = [
          phases=[phase('crew', [dict(name='a soldier', sprite='hench1', look='fsoldier1', extra=6),
                                 dict(name='a soldier', sprite='hench3', look='fsoldier2', extra=6),
                                 dict(name='a soldier', sprite='hench5', look='fsoldier3', extra=6)], [955, 956, 957], 951),
-                 phase('one', [dict(name='Dodoria', sprite='recoome', look='dodoria', tint=squad_tint((255, 168, 200), (150, 60, 100)), moveset=7, extra=10)],
+                 phase('one', [dict(name='Dodoria', sprite='nappa', look='dodoria', moveset=7, extra=10)],
                        [1020], 1021,
                        [('dodoria', "Well, well. The monkey who thinks he can see the future. Let's see you see this coming!"),
                         ('bardock', "Dodoria! You were at Planet Meat. You killed my whole team!")])],
@@ -294,8 +290,12 @@ def checks(st):
 def big_data(actors, s):
     """A big villain's figure for src/flight.c's 32x64 sprite: three poses (two walking, one casting), each four directions of 2 KB.
     The Great Ape is LoG1's own 32x64 sprite; giant Slug is Piccolo's frames in Slug's colours at twice the size (a pose too wide for that
-    keeps its walking frame)."""
+    keeps its walking frame). Cooler's final form is LoG2's own Cooler at 64x64 (4 KB a direction; the pointer's low bit says so)."""
     import log1_actors, log1_sprites as S
+    if s['big'].get('final') == 'cooler':
+        import log1_cooler
+        l2 = open(os.path.join(ROOT, 'rom', 'log12.gba'), 'rb').read()[0x800000:]
+        return actors.ins.put(log1_cooler.final_tiles(log1_cooler.final_images(l2, actors.r))) | 1
     rec = S.record(actors.log1, actors.log1[S.SETS + actors.names.index(s['sprite'])]); cmap = S.colour_map(actors.log1, rec, actors.r, s.get('tint'))
     sets = []
     for row in s['big']['rows']:

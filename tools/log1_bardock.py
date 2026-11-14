@@ -3,13 +3,20 @@
 Bardock's figure: Legacy of Goku II's armoured Vegeta (the party's Vegeta, tools/log1_party.py) with LoG2 Goku's
 head, in Bardock's colours. Made at build time from rom/log12.gba (the LoG I & II cart); nothing here holds art.
 
-Bardock is Goku's father and looks like him, darker-skinned, with a scar on his left cheek and a red headband. His armour (the TV special, Bardock
-- The Father of Goku): a green chest plate, dark navy shoulder and hip guards over a near-black bodysuit, red-brown wristbands, green boots.
+Bardock is Goku's father and looks like him, darker-skinned, with a scar on his left cheek and a red headband. The Dragon Ball Wiki, of the TV
+special: "He wears a unique model of Battle Armor that is dark blue and green in color with shoulder straps akin to what Vegeta wears from the
+Androids Saga onwards, with the addition of hip guards. In addition, he wears dark blue pants, long red wristbands with matching legbands, a
+green scouter on his left eye, and dark blue and green boots", and later "Tora's blood-soaked armband as a headband". The owner (Nov 13), of
+the first try (green from shoulders to boots, a two-row band over the top of the hair): "neither is Bardock" accurate.
 
-Every frame of LoG2 Vegeta's animations (r134) gets the head of LoG2 Goku's frame with the same animation, direction and number (r57; the two
-are built alike), placed on Vegeta's shoulders. Vegeta's greys (chest plate, gloves, boots share them) are told apart by where they sit: each
-connected patch at the bottom is a boot, the biggest one in the torso is the chest plate, the rest are hands. Where Vegeta's body can't take the
-head (an arm over it, a spin), Goku's own frame is used in Bardock's colours. tools/log1_party.py makes the figure a form of Goku's record;
+Every frame of LoG2 Vegeta's animations (r134: the Androids Saga armour, shoulder straps and all) gets the head of LoG2 Goku's frame with the
+same animation, direction and number (r57; the two are built alike), placed on Vegeta's shoulders. Vegeta's greys (chest plate, gloves,
+boots share them) are told apart by where they sit: everything in the bottom six rows is boot (its top row his red legband, the rest dark
+blue-green); the patch round his shoulder straps is the chest plate, only as wide as it is under the straps (green); every other grey is a
+hand (a long red wristband, the last two rows his bare hand). Vegeta's blue bodysuit is bare skin on his arms (beside the chest plate) and
+Bardock's dark blue pants below it; the yellow straps are dark green. The band crosses his forehead (one row, at the top of his face), the
+scar runs down his left cheek. Where Vegeta's body can't take the head (an arm over it, a spin), Goku's own frame is used in Bardock's
+colours. tools/log1_party.py makes the figure a form of Goku's record;
 src/skills.c puts it on him while he is on Planet Vegeta.
 
 Planet Vegeta (area 70): LoG1's Namek landing site (area 24, Saiyan pods in their craters) in Planet Vegeta's rust reds, written into the
@@ -34,18 +41,20 @@ GOKU_SKIN = {114: 18, 115: 19, 116: 20, 20: 20, 21: 23, 22: 23, 23: 23}     # Go
 GOKU_BODY = set(range(32, 36)) | {79, 80, 81, 215}    # his gi, undershirt and belt: below his head
 GOKU_GI = set(range(32, 36))                          # his gi alone: his wristbands (and hands) can be above his head
 # new colours in LoG2 slots no source frame uses
-GREEN = (240, 241, 242, 243)                          # chest plate and boots, light to dark
-NAVY = (244, 245, 246)                                # shoulder and hip guards
-BLACK = (247, 248, 249)                               # bodysuit
+GREEN = (240, 241, 242, 243)                          # chest plate (and shoulder straps), light to dark
+NAVY = (244, 245, 246)                                # his dark blue pants
+BOOTS = (247, 248, 249)                               # dark blue-green boots
 RED = (250, 251)                                      # headband
-BAND = (252, 253)                                     # wristbands
+BAND = (252, 253)                                     # wristbands and legbands
 SCAR = 254
-COLOURS = {240: (150, 214, 120), 241: (104, 176, 84), 242: (64, 128, 56), 243: (34, 80, 34),
-           244: (60, 66, 112), 245: (38, 42, 80), 246: (22, 24, 52),
-           247: (48, 46, 60), 248: (30, 28, 40), 249: (16, 14, 22),
-           250: (224, 40, 40), 251: (150, 18, 24),
-           252: (176, 70, 46), 253: (112, 40, 28),
+BLACK = BOOTS                                         # (the old name)
+COLOURS = {240: (124, 200, 104), 241: (80, 156, 70), 242: (50, 112, 50), 243: (28, 70, 32),
+           244: (58, 64, 124), 245: (38, 42, 90), 246: (22, 24, 58),
+           247: (54, 86, 98), 248: (34, 58, 68), 249: (18, 34, 40),
+           250: (230, 36, 36), 251: (150, 18, 24),
+           252: (214, 40, 40), 253: (140, 20, 24),
            254: (96, 40, 30)}
+ARM_SKIN = {79: 18, 80: 20, 81: 23}                   # Vegeta's sleeves, light to dark, as bare arm (his own skin's shades)
 
 
 def shoulder_line(img, body):
@@ -73,26 +82,41 @@ def components(mask):
 
 
 def body(v, sv):
-    """Vegeta's body in Bardock's colours (LoG2 indices), from his shoulders down."""
-    out = v.copy(); h = v.shape[0]
+    """Vegeta's body in Bardock's colours (LoG2 indices), from his shoulders down (sv: the shoulder row)."""
+    out = v.copy(); h, w = v.shape
     ys = np.nonzero(v)[0]; bottom = ys.max() if len(ys) else h - 1
-    for i in range(3): out[v == PADS[i]] = NAVY[i]
-    for i in range(3): out[v == SUIT[i]] = BLACK[i]
-    grey = np.isin(v, GREYS)
-    shade = {9: 0, 10: 0, 11: 1, 12: 1, 13: 2, 15: 3}
-    parts = components(grey)
-    torso = [p for p in parts if sv - 2 <= np.mean([y for y, _ in p]) < bottom - 7]
-    chest = max(torso, key=len) if torso else []
-    for p in parts:
-        cy = np.mean([y for y, _ in p])
-        if p is chest: kind = 'chest'
-        elif cy >= bottom - 7: kind = 'boot'
-        else: kind = 'hand'
+    boot_top = bottom - 5
+    # his armour's greys and whites, leaving out his hair's grey highlights (above his shoulders, inside his head's columns)
+    shade = {EYE: 0, 9: 0, 10: 0, 11: 1, 12: 1, 13: 2, 15: 3}
+    grey = np.isin(v, tuple(shade))
+    vh = [x for y in range(max(1, sv - 2)) for x in range(w) if v[y, x] == OUTLINE]
+    if vh: grey[:sv, max(0, min(vh) - 1):max(vh) + 2] = False
+    # the chest plate: the grey patch round his shoulder straps (or, with none in view, the one nearest his middle under the shoulders),
+    # cut to the columns it has in its top rows
+    straps = [(y, x) for y, x in zip(*np.nonzero(np.isin(v, PADS))) if y < boot_top]
+    cx = float(np.median([x for _, x in straps])) if straps else float(np.median(np.nonzero(v[sv:sv + 4])[1])) if v[sv:sv + 4].any() else w / 2
+    parts = [p for p in components(grey & (np.arange(h)[:, None] < boot_top))]
+    near = lambda p: min(abs(x - cx) + abs(y - sv - 2) for y, x in p)
+    close = [p for p in parts if near(p) <= 3]
+    chest = max(close, key=len) if close else min(parts, key=near) if parts else []
+    span = [x for y, x in chest if y <= min(yy for yy, _ in chest) + 1] if chest else []
+    x0, x1 = (min(span), max(span)) if span else (w, -1)
+    cbot = max(y for y, x in chest if x0 <= x <= x1) if chest else sv
+    in_chest = {(y, x) for y, x in chest if x0 <= x <= x1}
+    for y, x in zip(*np.nonzero(v)):
+        i = int(v[y, x])
+        if i in PADS: out[y, x] = GREEN[PADS.index(i) + 1]
+        elif i in SUIT:
+            if y <= cbot and not x0 <= x <= x1: out[y, x] = ARM_SKIN[i]          # bare arms beside the chest plate
+            else: out[y, x] = NAVY[SUIT.index(i)]
+    hands = grey & (np.arange(h)[:, None] < boot_top)
+    for y, x in in_chest: out[y, x] = GREEN[shade[int(v[y, x])]]; hands[y, x] = False
+    for p in components(hands):                                                   # a long red wristband, then the bare hand
+        last = max(y for y, _ in p)
+        for y, x in p: out[y, x] = (18 if shade[int(v[y, x])] < 2 else 20) if y >= last - 1 else BAND[0 if shade[int(v[y, x])] < 2 else 1]
+    for p in components(grey & (np.arange(h)[:, None] >= boot_top)):              # boots: the legband on top
         top = min(y for y, _ in p)
-        for y, x in p:
-            s = shade[int(v[y, x])]
-            if kind in ('chest', 'boot'): out[y, x] = GREEN[s]
-            else: out[y, x] = BAND[0 if s < 2 else 1] if y <= top + 1 else (18 if s < 2 else 20)       # a wristband, then a bare hand
+        for y, x in p: out[y, x] = BAND[0 if shade[int(v[y, x])] < 2 else 1] if y == top else BOOTS[min(2, shade[int(v[y, x])])]
     return out
 
 
@@ -110,38 +134,34 @@ def head(g, sg):
 
 
 def headband(hd, front):
-    """The red band across his forehead: the two rows from the top of his face (or, from behind, the same height), over the head's width
-    but its outline. Returns the band's top row."""
-    skin = [y for (y, x), i in hd.items() if i in (18, 19, 20, 23)]
+    """The red band across his forehead: one row, at the top of his face (the first row with his face's light skin), across the head inside
+    its outline. Returns the band's row."""
+    skin = [y for (y, x), i in hd.items() if i in (17, 18, 19, 20)]
     if not skin: return None
     top = min(skin)
-    for y in (top, top + 1):
-        xs = sorted(x for (yy, x) in hd if yy == y)
-        if len(xs) < 3: continue
-        for x in xs[1:-1]: hd[y, x] = RED[0] if y == top else RED[1]
+    xs = sorted(x for (yy, x) in hd if yy == top)
+    if len(xs) < 3: return None
+    for x in xs[1:-1]: hd[top, x] = RED[0]
     return top
 
 
 def goku_as_bardock(g):
     """Where Vegeta's body can't take Goku's head (arms over it, a spin): Goku's own frame in Bardock's colours, his gi green above his belt and
-    black below it, his wristbands red-brown, a red band across his forehead."""
+    dark blue below it, his wristbands red, a red band across his forehead."""
     out = g.copy(); h = g.shape[0]
     belt = [y for y in range(h) if (g[y] == 215).sum() >= 2]; by = belt[len(belt) // 2] if belt else h * 2 // 3
     shade = {32: 0, 33: 1, 34: 2, 35: 3}
     for y in range(h):
         for x in range(g.shape[1]):
             i = int(g[y, x])
-            if i in shade: out[y, x] = GREEN[shade[i]] if y < by else BLACK[min(2, shade[i])]
-            elif i == 215: out[y, x] = BLACK[1]
+            if i in shade: out[y, x] = GREEN[shade[i]] if y < by else NAVY[min(2, shade[i])]
+            elif i == 215: out[y, x] = NAVY[1]
             elif i in (79, 80, 81): out[y, x] = BAND[0 if i < 81 else 1]
             elif i in GOKU_SKIN: out[y, x] = GOKU_SKIN[i]
-    hd = {(y, x): int(out[y, x]) for y in range(h) for x in range(g.shape[1]) if out[y, x]}
-    skin = [y for (y, x), i in hd.items() if i in (18, 19, 20, 23) and y < h // 2]
-    if skin:
-        top = min(skin)
-        for y in (top, top + 1):
-            xs = sorted(x for x in range(g.shape[1]) if out[y, x])
-            for x in xs[1:-1]: out[y, x] = RED[0] if y == top else RED[1]
+    hd = {(y, x): int(out[y, x]) for y in range(h // 2) for x in range(g.shape[1]) if out[y, x]}
+    top = headband(hd, True)
+    if top is not None:
+        for (y, x), i in hd.items(): out[y, x] = i
     return out
 
 
@@ -152,22 +172,20 @@ def bardock(v, g, d):
     out = body(v, sv[0])
     hd = head(g, sg[0])
     if not hd: return out
-    # Vegeta's head goes: hair, skin and eyes above his shoulders, in his head's columns
+    # Vegeta's head goes: hair (and its grey highlights), skin and eyes above his shoulders, in his head's columns
     vh = [x for y in range(max(1, sv[0] - 2)) for x in range(v.shape[1]) if v[y, x] == OUTLINE]
     if vh:
         for y in range(sv[0]):
             for x in range(max(0, min(vh) - 1), min(v.shape[1], max(vh) + 2)):
-                if int(v[y, x]) in (OUTLINE, EYE) + VEG_SKIN: out[y, x] = 0
+                if int(v[y, x]) in (OUTLINE, EYE) + VEG_SKIN + GREYS: out[y, x] = 0
     dy, dx = sv[0] - sg[0], int(round(sv[1] - sg[1]))
     if sum(1 for (y, x) in hd if not (0 <= y + dy and 0 <= x + dx < out.shape[1])) * 4 > len(hd): return goku_as_bardock(g)     # the head won't fit on him
     hb = dict(hd)
     band = headband(hb, d != 1)
-    if d == 1 and band is None:                         # from behind: a band across the middle of his hair
-        ys = sorted({y for (y, x) in hb}); band = ys[len(ys) // 2] if ys else None
-        if band is not None:
-            for y in (band, band + 1):
-                xs = sorted(x for (yy, x) in hb if yy == y)
-                for x in xs[1:-1]: hb[y, x] = RED[0] if y == band else RED[1]
+    if d == 1 and band is None:                         # from behind: across his hair at the forehead's height (six rows over his shoulders,
+        band = sg[0] - 6                                # as from the front)
+        xs = sorted(x for (yy, x) in hb if yy == band)
+        for x in xs[1:-1]: hb[band, x] = RED[0]
     if d == 0 and band is not None:                      # his scar: his left cheek, our right, under his eyes
         eyes = [(y, x) for (y, x), i in hb.items() if i == EYE]
         if eyes:

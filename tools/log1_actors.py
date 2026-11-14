@@ -8,8 +8,9 @@ import numpy as np
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path[:0] = [os.path.join(ROOT, 'tools'), os.path.join(ROOT, 'vendor', 'gero-tools', 'tools')]
 import log1_sprites as S, sprites  # noqa: E402
-import log1_turles  # noqa: E402
-MADE = {'turles': log1_turles.cellf, 'turles2': log1_turles.cellf_fruit}                                   # look -> its frames' maker
+import log1_turles, log1_cooler, log1_dodoria  # noqa: E402
+MADE = {'turles': log1_turles.cellf, 'turles2': log1_turles.cellf_fruit, 'cooler': log1_cooler.cellf, 'cooler2': log1_cooler.cellf,
+        'dodoria': log1_dodoria.cellf}                                  # look -> its frames' maker
 BIG = ('oozaru1', 'oozaru2')                                            # taller than an actor's frame; src/flight.c draws them
 ROWS, ST_REFS = 256, (0xFCE4, 0xFD70, 0x1BA90, 0x24F28, 0x279DC, 0x2CD18, 0x2F5E4, 0x32D3C, 0x335B8, 0x39BD4, 0x39D90, 0x3A384, 0x3A698)
 BB = 0x08000000; ST = 0x711274; T_NPC, T_ENEMY = 152, 25; COUNT = 298
