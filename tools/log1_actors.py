@@ -9,8 +9,9 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path[:0] = [os.path.join(ROOT, 'tools'), os.path.join(ROOT, 'vendor', 'gero-tools', 'tools')]
 import log1_sprites as S, sprites  # noqa: E402
 import log1_turles, log1_cooler, log1_dodoria  # noqa: E402
-MADE = {'turles': log1_turles.cellf, 'turles2': log1_turles.cellf_fruit, 'cooler': log1_cooler.cellf, 'cooler2': log1_cooler.cellf,
-        'dodoria': log1_dodoria.cellf}                                  # look -> its frames' maker
+MADE = {'turles': log1_turles.cellf, 'turles2': log1_turles.cellf_fruit, 'cooler': log1_cooler.cellf, 'dodoria': log1_dodoria.cellf}   # look -> its frames' maker
+BOSSES = {'cooler2': log1_cooler.final_frames}                          # look -> its 64x64 frames' maker (l2, bf): a boss-class actor
+BOSS_CLASS = 0x10                                                       # record flags' high byte: Buu's Fury gives these 4 KB of OBJ VRAM a frame
 BIG = ('oozaru1', 'oozaru2')                                            # taller than an actor's frame; src/flight.c draws them
 ROWS, ST_REFS = 256, (0xFCE4, 0xFD70, 0x1BA90, 0x24F28, 0x279DC, 0x2CD18, 0x2F5E4, 0x32D3C, 0x335B8, 0x39BD4, 0x39D90, 0x3A384, 0x3A698)
 BB = 0x08000000; ST = 0x711274; T_NPC, T_ENEMY = 152, 25; COUNT = 298
@@ -32,6 +33,7 @@ class Actors:
         """tint, look: a recoloured copy (log1_yardrat's Yardrats), kept apart by its look's name."""
         key = (sprite, enemy) + ((look,) if look else ())
         if key in self.ids: return self.ids[key]
+        if look in BOSSES: return self.boss(key, BOSSES[look])
         rec = S.record(self.log1, self.log1[S.SETS + self.names.index(sprite)]); cmap = S.colour_map(self.log1, rec, self.r, tint)
         cf = MADE[look](self.log1, self.names, self.r) if look in MADE else None          # a figure made from two LoG1 characters
         tp = self.table[T_ENEMY if enemy else T_NPC] - BB; n = struct.unpack_from('<I', self.r, tp)[0] & 0xFF; R = bytearray(self.r[tp:tp + 0x54 + 4 * n]); struct.pack_into('<I', R, 0x50, 0); ok = 0
@@ -42,6 +44,23 @@ class Actors:
             want = struct.unpack_from('<I', self.r, a - BB)[0]; A = S.anim(self.ins, self.log1, rec, plan.get(i, [3, 4]), cmap, want=want, cellf=cf) or S.anim(self.ins, self.log1, rec, [0, 1, 2, 3, 4, 5, 17], cmap, want=want, cellf=cf) or S.anim(self.ins, self.log1, rec, plan.get(i, [3, 4]), cmap, want=want, fit=True, cellf=cf) or S.anim(self.ins, self.log1, rec, [0, 1, 2, 3, 4, 5, 17], cmap, want=want, fit=True, cellf=cf)
             if A: struct.pack_into('<I', R, 0x54 + 4 * i, A); ok += 1
         if not ok: self.missing.append(sprite)
+        self.ids[key] = len(self.table) + 9; self.table.append(self.ins.put(bytes(R)))
+        return self.ids[key]
+
+    def boss(self, key, maker):
+        """A boss-class enemy (the enemy template with class 0x10) whose slots are maker(l2, bf)'s 64x64 frames, each one OBJ piece of at most
+        64x64 (Gero's notes: class 0x10 actors get 4 KB of OBJ VRAM a frame; Super Android 13 walks, punches and dies that way)."""
+        l2 = open(os.path.join(ROOT, 'rom', 'log12.gba'), 'rb').read()[0x800000:]; frames = maker(l2, self.r)
+        tp = self.table[T_ENEMY] - BB; n = struct.unpack_from('<I', self.r, tp)[0] & 0xFF; R = bytearray(self.r[tp:tp + 0x54 + 4 * n]); struct.pack_into('<I', R, 0x50, 0)
+        R[3] = BOSS_CLASS
+        for i in range(n):
+            a = struct.unpack_from('<I', R, 0x54 + 4 * i)[0]
+            if a >> 24 != 8: continue
+            want = struct.unpack_from('<I', self.r, a - BB)[0]; dirs = frames.get(i, frames[0])
+            if len(dirs[0]) != want: dirs = [[ims[j * len(ims) // want] for j in range(want)] for ims in dirs]
+            ptrs = []
+            for k in range(want): ptrs += [big_frame(self.ins, dirs[0][k]), big_frame(self.ins, dirs[1][k]), big_frame(self.ins, dirs[2][k]), big_frame(self.ins, dirs[2][k], True)]
+            struct.pack_into('<I', R, 0x54 + 4 * i, self.ins.put(struct.pack('<I', want) + struct.pack('<%dI' % len(ptrs), *ptrs)))
         self.ids[key] = len(self.table) + 9; self.table.append(self.ins.put(bytes(R)))
         return self.ids[key]
 
@@ -113,6 +132,23 @@ class Actors:
         self.r[self.at:self.at + 4 * len(self.table)] = struct.pack('<%dI' % len(self.table), *self.table)
         for lit in sprites.ACTOR_LITERALS: struct.pack_into('<I', self.r, lit, BB + self.at + 4)
         return len(self.table) - COUNT, self.ins.cur
+
+
+def big_frame(ins, img, mirror=False):
+    """A boss-class frame: the art of a 64x64 cell (feet on its bottom row, mirrored about its middle) as ONE OBJ piece of at most 64x64,
+    placed as sprites.Inserter places a 32x32 cell's."""
+    ch, cw = img.shape; ys, xs = np.nonzero(img)
+    if not len(ys): ys, xs = np.array([ch - 1]), np.array([cw // 2])
+    y0, y1, x0, x1 = ys.min(), ys.max() + 1, xs.min(), xs.max() + 1
+    (px, py, w, h), = sprites.cover(x1 - x0, y1 - y0)
+    assert w * h <= 4096, 'boss frame %dx%d is over one 64x64 piece' % (x1 - x0, y1 - y0)
+    sub = np.zeros((h, w), np.uint8); part = img[y0:min(y1, y0 + h), x0:min(x1, x0 + w)]; sub[:part.shape[0], :part.shape[1]] = part
+    dx = int(x0) - (cw // 2 - 8) - (8 - w // 2); dy = int(y0) - (ch - 8) - (8 - h)
+    pc, _ = ins.piece(sub, mirror, dx, dy)
+    if mirror:
+        x = 16 - w - (int(x0) - (cw // 2 - 8))
+        pc = struct.pack('<bbBB', x, pc[1] if pc[1] < 128 else pc[1] - 256, w, h) * 2 + pc[8:]
+    return ins.put(struct.pack('<I', 1) + pc)
 
 
 def big_tiles(images):

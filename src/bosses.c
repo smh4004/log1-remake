@@ -36,7 +36,9 @@ typedef unsigned char u8; typedef unsigned short u16; typedef unsigned int u32; 
    boss_parts[k] = {frames, count, directions, bytes}: frames are 12-byte spark frames (s8 ox, oy; u8 w, h; u16 attr0, attr1; pixels), a
    directional part has count frames for each of down, up, left, right in turn.
    boss_table = {actor record, moveset, big figure or 0} rows, ending in 0. A big figure is three poses (walking, walking, casting), each 32x64
-   8bpp for down, up, left and right (2 KB each); with the pointer's low bit set, 64x64 (4 KB each). */
+   8bpp for down, up, left and right (2 KB each). TALL (1) in its place: a boss drawn tall by his own frames (a boss-class actor's 64x64
+   pieces: Cooler's final form), his shots starting as high as a big figure's. */
+#define TALL ((const u8 *)1)
 typedef struct { const u8 *frames; u8 count, dirs; u16 bytes; } part_t;
 typedef struct { u32 record; u32 moveset; const u8 *big; } boss_t;
 __attribute__((section(".text.table"))) volatile const part_t boss_parts[24] = {{0}};
@@ -293,8 +295,7 @@ static void big_figure(u8 *o) {
     if (BS.atk != 0xFF && !B2.stun) pose = 2;
     else if (x != B2.lastx || y != B2.lasty) pose = (FRAMES >> 3) & 1;
     B2.lastx = x; B2.lasty = y;
-    u32 wide = (u32)B2.big & 1;                                   /* a 64x64 figure: its poses 16 KB apart (src/flight.c) */
-    BIG_OBJ = (u32)o; BIG_DATA = (((u32)B2.big & ~1u) + pose * (wide ? 16384 : 8192)) | wide; B2.shown = o;
+    BIG_OBJ = (u32)o; BIG_DATA = (u32)B2.big + pose * 8192; B2.shown = o;
 }
 static void let_go(void) { if (B2.shown && BIG_OBJ == (u32)B2.shown) BIG_OBJ = 0; B2.shown = 0; }
 
@@ -312,7 +313,7 @@ void bosses_tick(void) {
         for (i = 0; i < 12 && boss_table[i].record; i++) if (boss_table[i].record == *(u32 *)(o + 0x58)) B2.big = boss_table[i].big;
         B2.tall = B2.big != 0; B2.lastx = px_(o); B2.lasty = py_(o);
     }
-    if (B2.big) big_figure(o);
+    if (B2.big && B2.big != TALL) big_figure(o);
     launch(me);
     if (B2.stun) {                                     /* Gohan's whistle: he staggers, clutching his head */
         B2.stun--;

@@ -4,7 +4,7 @@
     checks(st)      lines for side_check, which runs after a side enemy dies
     install(...)    each area's walk-in scenes and enemies (log1_areas, beside log1_side.install)
 
-Cooler (tools/log1_cooler.py): his final form is LoG2's own Cooler sprite, as a 64x64 big figure; his fourth form, which LoG2 hasn't got, is
+Cooler (tools/log1_cooler.py): his final form is LoG2's own Cooler sprite, a boss-class actor with 64x64 frames; his fourth form, which LoG2 hasn't got, is
 LoG1's final-form Frieza rebuilt in that sprite's colours (purple skin, white carapace, the blue gem). His Armored Squadron are LoG1's Frieza
 soldiers in their own colours.
 
@@ -98,7 +98,7 @@ FILMS = [
                        [('cooler', "Useless, all of them. Fine. I'll show you the difference between Frieza and me."),
                         ('gohan1', "Dad! Hold on! I'll fly to Korin's Tower and bring back Senzu Beans!"),
                         ('narrator', "Gohan streaks away across the Forest. Goku, still bleeding from the eye beam, squares up to Cooler alone.")]),
-                 phase('one', [dict(name='Cooler', sprite='frieza4', look='cooler2', moveset=1, extra=17, big=dict(final='cooler'))], [1019], 1018,
+                 phase('one', [dict(name='Cooler', sprite='frieza4', look='cooler2', moveset=1, extra=17, tall=True)], [1019], 1018,
                        [('cooler', "Impressive, for a monkey. Frieza only ever had four forms. I have one more."),
                         ('narrator', "Cooler's body swells. Plates of violet armour slide over his skull and a mask snaps shut across his mouth."),
                         ('gohan1', "Dad! Catch!"),
@@ -290,12 +290,8 @@ def checks(st):
 def big_data(actors, s):
     """A big villain's figure for src/flight.c's 32x64 sprite: three poses (two walking, one casting), each four directions of 2 KB.
     The Great Ape is LoG1's own 32x64 sprite; giant Slug is Piccolo's frames in Slug's colours at twice the size (a pose too wide for that
-    keeps its walking frame). Cooler's final form is LoG2's own Cooler at 64x64 (4 KB a direction; the pointer's low bit says so)."""
+    keeps its walking frame)."""
     import log1_actors, log1_sprites as S
-    if s['big'].get('final') == 'cooler':
-        import log1_cooler
-        l2 = open(os.path.join(ROOT, 'rom', 'log12.gba'), 'rb').read()[0x800000:]
-        return actors.ins.put(log1_cooler.final_tiles(log1_cooler.final_images(l2, actors.r))) | 1
     rec = S.record(actors.log1, actors.log1[S.SETS + actors.names.index(s['sprite'])]); cmap = S.colour_map(actors.log1, rec, actors.r, s.get('tint'))
     sets = []
     for row in s['big']['rows']:
@@ -320,6 +316,7 @@ def install(n, a, fits, r, actors, put, named, spawns, foe, walkins, BF_IDX):
                 if 'moveset' in s:
                     v = actors.actor(s['sprite'], True, s.get('tint'), s['look']); big = 0
                     if 'big' in s: actors.hidden(v); big = big_data(actors, s)
+                    if s.get('tall'): big = 1                       # src/bosses.c's TALL: drawn tall by his own (boss-class) frames
                     BOSS_ACTORS[s['look']] = (v, s['moveset'], big)
                 foe(s['sprite'], at[0], at[1], 'set:%d & clear:%d' % (ph['said'], ph['kills'][i]), ph['kills'][i],
                     s.get('extra', 8 + 2 * FILMS.index(f)), True, 41, tint=s.get('tint'), look=s['look'])

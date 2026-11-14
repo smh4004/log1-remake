@@ -1,5 +1,5 @@
 """Preview sheets of the post-game villains and Bardock, read from a built ROM: one PNG each, every animation's frames facing down, up and
-to the side (the Great Ape, giant Slug and Cooler's final form as their big figure: walking, walking, casting). Nothing here holds art; run it on your own
+to the side (the Great Ape and giant Slug as their big 32x64 figure: walking, walking, casting; Cooler's final form by his own 64x64 frames). Nothing here holds art; run it on your own
 build.
 
     python3 tools/villain_sheet.py <rom> <out dir>
@@ -49,24 +49,24 @@ def main(rom, out):
             y += ch * scale + 8
         can.save(path)
 
-    def actor_rows(rec, slots=12):
+    def actor_rows(rec, slots=12, box=48):
         n = struct.unpack_from('<I', r, rec - BB)[0] & 0xFF; rows = []
         for s in range(min(n, slots)):
             ap = struct.unpack_from('<I', r, rec - BB + 0x54 + 4 * s)[0]
             if ap >> 24 != 8: continue
             an = A.anim(ap)
             if not an: continue
-            ims = [A.frame(an[f][d], (48, 48), (24, 40)) for d in (0, 1, 2) for f in range(min(4, len(an)))]
+            ims = [A.frame(an[f][d], (box, box), (box // 2, box - 8)) for d in (0, 1, 2) for f in range(min(4, len(an)))]
             rows.append(('animation %d: %d frames x down, up, side' % (s, min(4, len(an))), ims))
         return rows
 
     def big_rows(big):
-        """src/flight.c's big figure: 32x64, or 64x64 when the pointer's low bit is set."""
-        rows = []; w = 64 if big & 1 else 32; size = 64 * w; tw = w // 8
+        """src/flight.c's big figure: 32x64."""
+        rows = []; w = 32; size = 64 * w; tw = w // 8
         for pose, what in enumerate(('walking', 'walking', 'casting')):
             ims = []
             for d in range(4):
-                o = (big & ~1) - BB + pose * 4 * size + d * size; img = np.zeros((64, w), np.uint8)
+                o = big - BB + pose * 4 * size + d * size; img = np.zeros((64, w), np.uint8)
                 for t in range(size // 64): img[(t // tw) * 8:(t // tw) * 8 + 8, (t % tw) * 8:(t % tw) * 8 + 8] = np.frombuffer(r[o + 64 * t:o + 64 * t + 64], np.uint8).reshape(8, 8)
                 ims.append(img)
             rows.append((what + ': down, up, left, right', ims))
@@ -78,7 +78,7 @@ def main(rom, out):
         rec, m, big = struct.unpack_from('<III', r, t + 12 * i)
         if not rec: break
         name = NAMES.get(m, 'villain %d' % m); path = os.path.join(out, name.lower().replace(' ', '_').replace('(', '').replace(')', '') + '.png')
-        sheet(big_rows(big) if big else actor_rows(rec), name, path); done.append(path)
+        sheet(big_rows(big) if big > 1 else actor_rows(rec, box=72 if big else 48), name, path); done.append(path)      # 1: drawn tall by his own frames
     ft = struct.unpack_from('<I', r, syms['forms_at'] - BB)[0] - BB; val = struct.unpack_from('<H', r, ft + 24 * BARDOCK_FORM + 0x0E)[0]
     rec = struct.unpack_from('<I', r, 0xC00000 + 4 * (val - 9))[0]
     path = os.path.join(out, 'bardock.png'); sheet(actor_rows(rec, 24), "Bardock (Goku's form in the vision)", path, scale=2); done.append(path)

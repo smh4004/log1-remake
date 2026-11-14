@@ -18,13 +18,13 @@ small spikes grow from his forearm covers. He gets blue spots on his legs and ar
 now become a full oval on his crown. His face is masked by a visor that covers all except his new pupil-less red eyes" (the same). LoG2's
 record r31 is LoG2's own Cooler in that form (the owner, Nov 13: "Yeah they got the Cooler sprite in LoG2 just use that"), drawn about half
 again Goku's height: crowned white carapace, the blue oval, the visor with the red eyes, shoulder bows, forearm spikes, the blue spots, the
-spiked tail. It is used as it is, in its own colours, and the fourth form takes its colours from it. Being taller than an actor's 32x32 piece,
-it is a big figure (src/flight.c, 64x64): standing, striding (the walk alternates them) and casting, four directions each. LoG2 has no
-fourth-form Cooler, hence the rebuilt Frieza above.
+spiked tail. It is used as it is, in its own colours, with its own animations, and the fourth form takes its colours from it. Being taller
+than a character's 32x32 piece, he is a boss-class actor (class 0x10: Buu's Fury gives those 4 KB of OBJ video memory a frame, one piece up
+to 64x64, as its own big bosses have), so the engine draws and animates him itself. LoG2 has no fourth-form Cooler, hence the rebuilt Frieza
+above.
 
     cellf(d, names, bf)          -> cell(row, col, fit): a 32x32 fourth-form frame in Buu's Fury OBJ colours, as log1_sprites.cell
-    final_images(l2, bf)         -> [12 64x64 index arrays]: 3 poses x (down, up, side, side mirrored)
-    final_tiles(images)          -> their 8bpp tiles, for src/flight.c
+    final_frames(l2, bf)         -> {Buu's Fury slot: [down, up, side frames]} of 64x64 cells, for log1_actors.Actors.boss
     python3 tools/log1_cooler.py check     the audit: prints the rules a frame breaks, exits 1 if any
 """
 import numpy as np
@@ -109,47 +109,41 @@ def cellf(d, names, bf):
     return cell
 
 
-# ---------- the final form: LoG2 r31, a 64x64 big figure ----------
+# ---------- the final form: LoG2 r31, a boss-class actor with 64x64 frames ----------
 FINAL = 'r31'
-POSES = [(0, 0), (1, 1), (5, 0)]                              # (LoG2 animation, frame): standing, striding (the walk alternates them), casting
-ORIGIN = (20, 56)                                             # where LoG2's origin goes on the 64x64 canvas: his body's middle on column 32, his
-                                                              # feet on the last row (src/flight.c puts the canvas's (32, 56) on the actor's spot)
-AXIS = 32                                                     # the side frame is mirrored about his middle, so he doesn't jump when he turns
+# Buu's Fury enemy slot -> LoG2 r31 animation and frames (the enemy template's counts: 0 standing 2, 1 walking 4, 4 attack 4, 9 hit 3,
+# 18 attack 4): standing, walking, his punches, his recoil, his kicks
+SLOTS = {0: (0, [0, 1]), 1: (1, [0, 1, 2, 3]), 4: (6, [0, 1, 2, 3]), 9: (5, [0, 1, 2]), 18: (7, [0, 1, 2, 3])}
+ORIGIN = (20, 56)                                             # where LoG2's origin goes on the 64x64 cell: his body's middle on column 32 (the
+                                                              # cell's middle, which the engine mirrors about), his feet on the bottom row
 
 
-def final_images(l2, bf):
-    import sprites, log1_bardock as B
+def final_frame(l2, rec, cmap, k, d, f):
+    """LoG2 r31 animation k, direction d (0 down, 1 up, 2 side), frame f on a 64x64 cell in Buu's Fury colours."""
+    import log1_bardock as B
+    x, y, w, h, attr, tp, img = B.frame_img(l2, rec, k, d, f)
+    can = np.zeros((64, 64), np.uint8); ox, oy = ORIGIN[0] + x, ORIGIN[1] + y
+    for yy, xx in zip(*np.nonzero(img)):
+        assert 0 <= oy + yy < 64 and 0 <= ox + xx < 64, 'r31 animation %d frame %d reaches past the 64x64 cell' % (k, f)
+        can[oy + yy, ox + xx] = cmap[img[yy, xx]]
+    return can
+
+
+def final_frames(l2, bf):
+    """{Buu's Fury slot: [down frames, up frames, side frames]} of 64x64 cells (log1_actors.Actors.boss makes the actor)."""
+    import sprites
     rec = sprites.log2_rec(l2, FINAL); bfc = to_bf(bf)
     pal = np.frombuffer(l2[sprites.L2_PAL + 768:sprites.L2_PAL + 1536], np.uint8).reshape(256, 3)
     cmap = np.zeros(256, np.uint8)
     for i in range(1, 256): cmap[i] = bfc(tuple(int(v) for v in pal[i]))           # its own colours (the owner, Nov 13: "just use that")
-    out = []
-    for k, fr in POSES:
-        ims = []
-        for d in (0, 1, 2):
-            x, y, w, h, attr, tp, img = B.frame_img(l2, rec, k, d, fr)
-            can = np.zeros((64, 64), np.uint8); ox, oy = ORIGIN[0] + x, ORIGIN[1] + y
-            ys, xs = np.nonzero(img)
-            for yy, xx in zip(ys, xs):
-                if 0 <= oy + yy < 64 and 0 <= ox + xx < 64: can[oy + yy, ox + xx] = cmap[img[yy, xx]]
-            ims.append(can)
-        side = ims[2]; mir = np.zeros_like(side)
-        for c in range(64):
-            if 0 <= 2 * AXIS - c < 64: mir[:, c] = side[:, 2 * AXIS - c]
-        out += [ims[0], ims[1], side, mir]
-    return out
-
-
-def final_tiles(images):
-    """64x64 index arrays -> their 8bpp tiles (OBJ 1D order: eight tiles a row), one after another."""
-    return b''.join(im[y:y + 8, x:x + 8].tobytes() for im in images for y in range(0, 64, 8) for x in range(0, 64, 8))
+    return {slot: [[final_frame(l2, rec, cmap, k, d, f) for f in fs] for d in (0, 1, 2)] for slot, (k, fs) in SLOTS.items()}
 
 
 # ---------- the audit ----------
 def check(log1, l2, bf, names):
     """Fails (returns the broken rules) when: a fourth-form frame keeps any of Frieza's colours; his standing and walking frames don't line
     up (top of the dome, feet); a made frame lost pixels at the canvas edge; the final form's feet aren't on the canvas's last row (7 below the actor's spot, as LoG1's and LoG2's frames have them), its frames touch the
-    canvas edge (cut off), or its side and mirrored side frames don't share his middle."""
+    canvas edge (cut off: final_frame refuses that), or his standing frame's middle isn't the cell's middle (the engine mirrors about it)."""
     bad = []; bfc = to_bf(bf); ok = {bfc(c) for c in SKIN + PLATE + GEM + [STRIPE, BLACK, GREY]}
     cell = cellf(log1, names, bf)
     for row in (0, 1, 2, 3, 4, 5):
@@ -162,14 +156,15 @@ def check(log1, l2, bf, names):
         a, b = cell(0, col), cell(1, col)
         ta, tb = np.nonzero(a)[0].min(), np.nonzero(b)[0].min(); fa, fb = np.nonzero(a)[0].max(), np.nonzero(b)[0].max()
         if abs(int(ta) - int(tb)) > 1 or fa != fb: bad.append('fourth form col %d: standing and walking frames out of line (top %d/%d, feet %d/%d)' % (col, ta, tb, fa, fb))
-    ims = final_images(l2, bf)
-    for i, im in enumerate(ims):
-        ys, xs = np.nonzero(im)
-        if ys.max() != 63: bad.append('final form frame %d: feet on row %d, not 63' % (i, ys.max()))
-        if xs.min() == 0 or xs.max() == 63 or ys.min() == 0: bad.append('final form frame %d: cut off at the edge' % i)
-    for p in range(len(POSES)):
-        s, m = ims[4 * p + 2], ims[4 * p + 3]
-        if abs(np.nonzero(s)[1].mean() - (2 * AXIS - np.nonzero(m)[1].mean())) > 0.01: bad.append('final form pose %d: mirrored side off its middle' % p)
+    for slot, dirs in final_frames(l2, bf).items():
+        for d, ims in enumerate(dirs):
+            for i, im in enumerate(ims):
+                ys, xs = np.nonzero(im)
+                if slot in (0, 1) and ys.max() != 63: bad.append('final form slot %d dir %d frame %d: feet on row %d, not 63' % (slot, d, i, ys.max()))
+        if slot == 0:                                             # standing: his middle on the cell's middle, so mirroring keeps him in place
+            for d in (0, 2):
+                body = [x for y, x in zip(*np.nonzero(dirs[d][0])) if 30 <= y <= 50]
+                if abs(np.median(body) - 32) > 3: bad.append('final form standing dir %d: his middle at column %.1f, not 32' % (d, np.median(body)))
     return bad
 
 
